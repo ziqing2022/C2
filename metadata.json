@@ -1,0 +1,8 @@
+{
+  "name": "VisionC2 Tactical Command Center",
+  "description": "Tactical botnet C2 management dashboard featuring bot monitoring, global telemetry mapping, terminal shell, and network diagnostics.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

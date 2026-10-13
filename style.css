@@ -441,8 +441,232 @@ body::before {
 }
 
 /* ============================================================================
-   COMMAND CENTER PANEL (Floating Docked Bar)
+   CYBERPUNK TACTICAL SVG RADAR MAP STYLES
    ============================================================================ */
+.map-panel-wrap {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.map-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.map-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.map-badge {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--green);
+  background: var(--green-dim);
+  border: 1px solid rgba(74, 222, 128, 0.25);
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+
+.cyber-radar-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(ellipse at 50% 50%, #0d1527 0%, #060913 100%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  user-select: none;
+}
+
+.radar-hud-bar {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--blue);
+  pointer-events: none;
+  z-index: 10;
+}
+
+.radar-hud-tag {
+  background: rgba(7, 10, 18, 0.75);
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.radar-hud-bottom {
+  position: absolute;
+  bottom: 8px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  pointer-events: none;
+  z-index: 10;
+}
+
+.landmass-path {
+  fill: #131c30;
+  stroke: #25395f;
+  stroke-width: 1.2;
+  transition: fill 0.25s ease, stroke 0.25s ease;
+}
+
+.landmass-path:hover {
+  fill: #1a2744;
+  stroke: var(--accent);
+}
+
+.radar-grid-line {
+  stroke: rgba(56, 189, 248, 0.12);
+  stroke-width: 0.8;
+  stroke-dasharray: 4, 4;
+}
+
+.radar-ring {
+  stroke: rgba(168, 85, 247, 0.15);
+  stroke-width: 0.8;
+  fill: none;
+}
+
+@keyframes radarSweepAnim {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.radar-sweep-arm {
+  transform-origin: 500px 250px;
+  animation: radarSweepAnim 7s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes botPulseRing {
+  0% { r: 4px; opacity: 1; stroke-width: 1.8px; }
+  100% { r: 18px; opacity: 0; stroke-width: 0.4px; }
+}
+
+.bot-radar-pulse {
+  animation: botPulseRing 2.2s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+  pointer-events: none;
+}
+
+.radar-node-group {
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.radar-node-group:hover .bot-radar-dot {
+  fill: #ffffff;
+  filter: drop-shadow(0 0 8px #00ff66) drop-shadow(0 0 14px #00ff66);
+}
+
+.radar-hud-tooltip {
+  position: absolute;
+  z-index: 9999;
+  background: rgba(13, 18, 31, 0.95);
+  border: 1px solid var(--accent);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7), 0 0 14px var(--accent-glow);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  color: var(--text);
+  font-size: 12px;
+  min-width: 220px;
+  backdrop-filter: blur(10px);
+  pointer-events: auto;
+  transition: opacity 0.15s ease;
+}
+
+.rtt-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(168, 85, 247, 0.3);
+  padding-bottom: 6px;
+  margin-bottom: 8px;
+}
+
+.rtt-title {
+  font-weight: 700;
+  color: var(--accent);
+  font-size: 13px;
+}
+
+.rtt-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  font-size: 11px;
+}
+
+.rtt-label {
+  color: var(--text-dim);
+}
+
+.rtt-val {
+  font-family: var(--mono);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.rtt-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.rtt-btn {
+  flex: 1;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  background: var(--accent);
+  color: #fff;
+  transition: opacity 0.2s;
+}
+
+.rtt-btn:hover {
+  opacity: 0.85;
+}
+
+.rtt-btn.sec {
+  background: #1f293d;
+  color: #94a3b8;
+}
+
+.rtt-btn.sec:hover {
+  background: #27354f;
+  color: #fff;
+}
+
 .cmd-dock {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -722,4 +946,311 @@ body::before {
   gap: 8px;
   flex-wrap: wrap;
 }
+
+/* ============================================================================
+   BATCH ACTIONS FLOATING DOCK & CHIP STYLES
+   ============================================================================ */
+.batch-bar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(13, 18, 31, 0.95);
+  border: 1px solid var(--accent);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8), 0 0 20px var(--accent-glow);
+  border-radius: 40px;
+  padding: 10px 24px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  z-index: 9999;
+  backdrop-filter: blur(12px);
+  animation: slideUpBatch 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes slideUpBatch {
+  from { transform: translate(-50%, 40px); opacity: 0; }
+  to { transform: translate(-50%, 0); opacity: 1; }
+}
+
+.batch-bar-info {
+  font-weight: 700;
+  font-size: 13px;
+  color: #fff;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.batch-bar-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.quick-chips-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.quick-chip {
+  padding: 3px 8px;
+  font-size: 11px;
+  font-family: var(--mono);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-light);
+  color: var(--blue);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.quick-chip:hover {
+  background: var(--blue-dim);
+  border-color: var(--blue);
+  color: #fff;
+}
+
+.cmd-row-main {
+  width: 100%;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.cmd-row-args {
+  width: 100%;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+
+/* ============================================================================
+   MICRO-INTERACTIONS & POLISH (Button press, Tabular Nums, Glass Highlights)
+   ============================================================================ */
+/* 1. Button active tactile dampening */
+button:active,
+.cmd-submit-btn:active,
+.cmd-cat-btn:active,
+.action-icon-btn:active,
+.rtt-btn:active,
+.quick-chip:active,
+.map-btn:active {
+  transform: scale(0.96) !important;
+  transition: transform 0.08s ease !important;
+}
+
+/* 2. Tabular numbers to avoid layout shaking */
+.sc-val,
+.m-val,
+.country-count,
+.custom-table td,
+.radar-hud-bar,
+.batch-bar-info,
+#term-status,
+.scanner-card-actions {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 3. Smooth Dark/Light Theme Transition */
+body,
+.sidebar,
+.top-header,
+.stat-card-v2,
+.analytics-card,
+.map-panel-wrap,
+.custom-table,
+.custom-table th,
+.custom-table td,
+.cmd-dock,
+.scanner-card,
+.modal-box,
+.table-container {
+  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease;
+}
+
+/* 4. Panel Inner Border Highlights (Subtle metallic/glass top light) */
+.stat-card-v2,
+.analytics-card,
+.map-panel-wrap,
+.cmd-dock,
+.scanner-card,
+.table-container {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), var(--shadow-sm);
+}
+
+.stat-card-v2:hover,
+.scanner-card:hover {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+/* 5. Cyber Empty State Styling */
+.table-empty-cell {
+  text-align: center;
+  padding: 36px 20px !important;
+  color: var(--text-dim);
+}
+
+.table-empty-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.table-empty-icon {
+  font-size: 26px;
+  opacity: 0.55;
+}
+
+/* ============================================================================
+   TOAST NOTIFICATION COMPONENT STYLES
+   ============================================================================ */
+.toast-container {
+  position: fixed;
+  top: 24px;
+  right: 28px;
+  z-index: 100000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.toast-msg {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 18px;
+  background: rgba(13, 18, 31, 0.96);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.65), 0 0 14px var(--accent-glow);
+  color: var(--text);
+  font-size: 13px;
+  backdrop-filter: blur(12px);
+  animation: toastSlideIn 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  min-width: 200px;
+}
+
+.toast-msg.success {
+  border-color: rgba(74, 222, 128, 0.5);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.65), 0 0 12px var(--green-dim);
+}
+
+.toast-msg.error {
+  border-color: rgba(248, 113, 113, 0.5);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.65), 0 0 12px var(--red-dim);
+}
+
+.toast-msg.hide {
+  opacity: 0;
+  transform: translateX(30px);
+}
+
+.toast-icon {
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.toast-msg.success .toast-icon { color: var(--green); }
+.toast-msg.error .toast-icon { color: var(--red); }
+.toast-msg.info .toast-icon { color: var(--blue); }
+
+@keyframes toastSlideIn {
+  from { opacity: 0; transform: translateX(40px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* ============================================================================
+   CRT SCANLINE & ATMOSPHERIC EFFECTS (Point 2)
+   ============================================================================ */
+.crt-overlay {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 99998;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.28) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.02), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.02));
+  background-size: 100% 3px, 6px 100%;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+body.crt-active .crt-overlay {
+  opacity: 0.85;
+}
+
+/* Status Pulse Dot for Live Bots */
+.status-pulse-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: var(--green);
+  box-shadow: 0 0 8px var(--green);
+  margin-right: 6px;
+  animation: statusGlow 1.8s infinite ease-in-out;
+  vertical-align: middle;
+}
+
+@keyframes statusGlow {
+  0%, 100% { transform: scale(1); opacity: 1; box-shadow: 0 0 6px var(--green); }
+  50% { transform: scale(1.3); opacity: 0.65; box-shadow: 0 0 12px var(--green); }
+}
+
+/* Quick Copyable Text Cell with Subtle Cyber Hint (Point 3.2) */
+.copyable-text {
+  cursor: pointer;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 4px;
+  padding: 1px 4px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.copyable-text:hover {
+  background: rgba(168, 85, 247, 0.15);
+  color: var(--accent);
+}
+
+.copy-icon-hint {
+  font-size: 10px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.copyable-text:hover .copy-icon-hint {
+  opacity: 0.85;
+}
+
+/* PTY Terminal Maximize / Fullscreen HUD Mode (Point 3.2) */
+.term-fullscreen {
+  position: fixed !important;
+  inset: 16px !important;
+  z-index: 99990 !important;
+  height: calc(100vh - 32px) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  box-shadow: 0 0 50px rgba(0, 0, 0, 0.9), 0 0 30px var(--accent-glow) !important;
+}
+
+.term-fullscreen #term-output {
+  flex: 1 !important;
+  height: auto !important;
+  max-height: none !important;
+}
+
+
 
